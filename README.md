@@ -2,6 +2,8 @@
 
 > ### *Ask your docs. Get a cited answer — or an honest "I don't know."*
 
+![KAI answering the same question on the web UI, in Slack, and in Webex — grounded and cited](doc/screenshots/hero.png)
+
 **KAI — Know · Ask · Inform.**
 - **K**now — it grounds itself in *your* documents (the knowledge base it indexes).
 - **A**sk — ask in plain language, from the web UI, the HTTP API, or a chat bot.
