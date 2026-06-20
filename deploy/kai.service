@@ -1,0 +1,26 @@
+# systemd unit for the KAI API on a bare-metal / VM host.
+#
+#   sudo cp deploy/kai.service /etc/systemd/system/kai.service
+#   sudo systemctl daemon-reload && sudo systemctl enable --now kai
+#   journalctl -u kai -f        # logs
+#
+# Adjust User, WorkingDirectory and the venv path to your install.
+[Unit]
+Description=KAI knowledge assistant (API)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kai
+WorkingDirectory=/opt/kai
+EnvironmentFile=/opt/kai/.env
+ExecStart=/opt/kai/.venv/bin/uvicorn kai.app:app --host 0.0.0.0 --port 8100
+Restart=on-failure
+RestartSec=3
+# Hardening (optional, tighten to taste)
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

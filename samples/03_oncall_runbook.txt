@@ -1,0 +1,36 @@
+On-Call Runbook
+===============
+
+This runbook describes how the on-call rotation works and what to do during an
+incident. It is an original sample document bundled with KAI for demonstration.
+
+On-call rotation
+----------------
+- The on-call schedule runs weekly, handing over every Monday at 10:00.
+- The primary on-call engineer acknowledges pages within 15 minutes. If the primary
+  does not acknowledge within 15 minutes, the alert escalates to the secondary.
+- Hand over any open incidents and context in the #ops channel at the end of a shift.
+
+Severity levels
+---------------
+- SEV1 - a customer-facing outage or data loss. Page immediately, start an incident
+  channel, and notify the incident commander.
+- SEV2 - degraded service or a failing non-critical component. Respond within 30
+  minutes.
+- SEV3 - a minor issue with no customer impact. Handle during business hours.
+
+During an incident
+------------------
+1. Acknowledge the page so the rotation knows it is being handled.
+2. Open an incident channel named #inc-YYYYMMDD-short-title and post a short summary.
+3. Mitigate first, diagnose second - restore service before root-causing.
+4. Keep a timeline of the actions taken in the incident channel.
+5. When resolved, post an all-clear and schedule a blameless postmortem within three
+   business days.
+
+Escalation contacts
+-------------------
+- Database issues: the data platform team.
+- Networking or VPN issues: the infrastructure team.
+- Security incidents: page the security on-call directly and do not discuss details
+  in public channels.

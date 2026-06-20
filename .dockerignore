@@ -1,0 +1,20 @@
+# Keep the build context (and image) small — only kai/ + pyproject + README ship.
+.git
+.github
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.env
+.kai.pid
+internal/
+release/
+tests/
+eval/
+doc/
+samples/
+deploy/
+frontend/
+scripts/
+.DS_Store
+*.egg-info
