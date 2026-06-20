@@ -1,0 +1,35 @@
+# KAI Slack app manifest — paste-to-create.
+#
+# api.slack.com/apps → Create New App → From an app manifest → pick your workspace
+# → paste this YAML → Create. It pre-configures Socket Mode, the bot scopes, and the
+# event subscriptions KAI's adapter needs, so you only have to:
+#   1. Basic Information → App-Level Tokens → Generate (connections:write) → SLACK_APP_TOKEN (xapp-)
+#   2. Install to Workspace → Bot User OAuth Token → SLACK_BOT_TOKEN (xoxb-)
+#   3. /invite @KAI in a channel, then: CHAT_PLATFORM=slack python run/setup.py bot
+#
+# Rename "KAI" below if you want a different bot name.
+display_information:
+  name: KAI
+  description: Grounded knowledge-base assistant (answers with sources, never guesses).
+  background_color: "#1f2a44"
+features:
+  bot_user:
+    display_name: KAI
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      - app_mentions:read   # receive @mentions
+      - chat:write          # post answers
+      - commands            # interactive Block Kit buttons (feedback)
+      - im:history          # read DM contents (ask in a 1:1)
+      - im:read             # DM channel info
+settings:
+  event_subscriptions:
+    bot_events:
+      - app_mention         # @KAI <question> in a channel
+      - message.im          # any message in a DM
+  interactivity:
+    is_enabled: true        # the 👍/👎/Escalate Block Kit buttons
+  socket_mode_enabled: true # outbound websocket — no public URL needed
+  org_deploy_enabled: false

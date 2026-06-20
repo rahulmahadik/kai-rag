@@ -1,0 +1,76 @@
+# KAI — turnkey stack: the API + Postgres (with pgvector).
+#
+#   1. cp .env.example .env   and fill in your LLM/embedding endpoint + models
+#   2. docker compose up -d --build
+#   3. seed the knowledge base:  curl -X POST http://localhost:8100/ingest
+#   4. open the chat UI:         http://localhost:3000/   (API itself is :8100)
+#
+# KAI talks to ANY OpenAI-compatible LLM + embedding endpoint — point the
+# EMBED_*/LLM_* vars in .env at Ollama, vLLM, llama.cpp, OpenAI, Together, etc.
+# To run the models locally too, uncomment the `ollama` service at the bottom.
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: kai
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kai}
+      POSTGRES_DB: kai
+    volumes:
+      - kai_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kai"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  kai:
+    build:
+      context: .
+      # add ",rerank" to pull the cross-encoder (also set RERANKER=cross_encoder)
+      args:
+        EXTRAS: bot,slack
+    env_file: .env
+    environment:
+      # point the app at the bundled db service (overrides any .env DATABASE_URL)
+      DATABASE_URL: postgresql://kai:${POSTGRES_PASSWORD:-kai}@db:5432/kai
+    ports:
+      - "8100:8100"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Web frontend — a SEPARATE static app (nginx) that calls the API over CORS.
+  frontend:
+    image: nginx:alpine
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    ports:
+      - "3000:80"
+    depends_on: [kai]
+    restart: unless-stopped
+
+  # ---- Optional: Webex/Slack chat bot, same image, separate process ----------
+  # bot:
+  #   build: { context: ., args: { EXTRAS: bot,slack } }
+  #   env_file: .env
+  #   environment:
+  #     KAI_API_URL: http://kai:8100
+  #     DATABASE_URL: postgresql://kai:${POSTGRES_PASSWORD:-kai}@db:5432/kai
+  #   command: ["python", "-c", "from kai.bot import run_bot; run_bot()"]
+  #   depends_on: [kai]
+  #   restart: unless-stopped
+
+  # ---- Optional: run the models locally (fully offline) ----------------------
+  # ollama:
+  #   image: ollama/ollama
+  #   volumes: [ollama:/root/.ollama]
+  #   ports: ["11434:11434"]
+  #   restart: unless-stopped
+  #   # then in .env:  EMBED_BASE_URL/LLM_BASE_URL = http://ollama:11434/v1
+
+volumes:
+  kai_pgdata:
+  # ollama:

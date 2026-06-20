@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KAI — knowledge assistant</title>
+<style>
+  :root { --bg:#0f1420; --panel:#161d2e; --me:#264b7a; --kai:#1f2a3f; --muted:#8a97ad;
+          --accent:#5b8def; --warn:#caa34a; --text:#e8edf6; --line:#26304a; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+         background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; }
+  header { padding:14px 18px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  header b { font-size:16px; } header .tag { color:var(--muted); font-size:12.5px; }
+  #log { flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:14px; }
+  .row { display:flex; } .row.me { justify-content:flex-end; }
+  .bubble { max-width:760px; padding:11px 14px; border-radius:12px; background:var(--kai);
+            border:1px solid var(--line); white-space:pre-wrap; word-wrap:break-word; }
+  .row.me .bubble { background:var(--me); border-color:transparent; }
+  .bubble.escalated { border-color:var(--warn); }
+  .bubble a { color:var(--accent); }
+  .sources { margin-top:9px; padding-top:8px; border-top:1px solid var(--line); font-size:13px; }
+  .sources .h { color:var(--muted); margin-bottom:3px; }
+  .meta { font-size:11.5px; color:var(--muted); margin-top:7px; }
+  .meta.note { font-style:italic; }
+  .pill { display:inline-block; padding:1px 7px; border-radius:9px; font-size:11px; }
+  .pill.ok { background:#1c3b2a; color:#7ddca0; } .pill.esc { background:#3b2f1c; color:var(--warn); }
+  .examples { display:flex; flex-wrap:wrap; gap:8px; margin-top:11px; }
+  .chip { padding:5px 11px; border-radius:999px; border:1px solid var(--line); background:#0c111b;
+          color:var(--muted); font-size:12.5px; cursor:pointer; }
+  .chip:hover { border-color:var(--accent); color:var(--text); }
+  #filebar { display:none; gap:10px; align-items:center; padding:10px 18px 0; }
+  #filebar.show { display:flex; }
+  .filepill { display:inline-flex; align-items:center; gap:8px; padding:4px 10px; border-radius:9px;
+              background:#13203a; border:1px solid var(--line); font-size:12.5px; }
+  .filepill .x { cursor:pointer; color:var(--muted); } .filepill .x:hover { color:var(--text); }
+  form { display:flex; gap:10px; padding:14px 18px; border-top:1px solid var(--line); background:var(--panel); }
+  #clip { display:flex; align-items:center; justify-content:center; width:42px; cursor:pointer; font-size:18px;
+          border:1px solid var(--line); border-radius:10px; background:#0c111b; user-select:none; }
+  #clip:hover { border-color:var(--accent); }
+  #q { flex:1; padding:11px 13px; border-radius:10px; border:1px solid var(--line);
+       background:#0c111b; color:var(--text); font-size:15px; }
+  button { padding:0 18px; border:0; border-radius:10px; background:var(--accent); color:#fff;
+           font-weight:600; cursor:pointer; } button:disabled { opacity:.5; cursor:default; }
+  .dots::after { content:'…'; animation:d 1.2s steps(4,end) infinite; }
+  @keyframes d { 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} }
+  .cfg { width:210px; padding:7px 9px; border-radius:8px; border:1px solid var(--line);
+         background:#0c111b; color:var(--text); font-size:12px; }
+  .cfg.key { width:150px; }
+</style>
+</head>
+<body>
+  <header>
+    <b>KAI</b><span class="tag">Know · Ask · Inform — grounded, cited answers from your knowledge base; it won't guess</span>
+    <span style="flex:1"></span>
+    <input id="api" class="cfg" placeholder="API base URL" autocomplete="off" />
+    <input id="key" class="cfg key" placeholder="API key (if set)" autocomplete="off" />
+  </header>
+  <div id="log">
+    <div class="row"><div class="bubble">Hi! Ask me anything about the knowledge base — I'll answer with sources, or tell you if I don't know. You can also <b>attach a file</b> (📎) and ask about it — I'll read it just for that question (it isn't saved).
+      <div class="examples">
+        <span class="chip">What can you do?</span>
+        <span class="chip">How do I reset my password?</span>
+        <span class="chip">Summarize our on-call process</span>
+      </div>
+    </div></div>
+  </div>
+  <div id="filebar"></div>
+  <form id="f">
+    <label id="clip" title="Attach a file (PDF, text, Markdown, HTML)">📎<input id="file" type="file"
+      accept=".pdf,.txt,.text,.log,.md,.markdown,.rst,.html,.htm" hidden /></label>
+    <input id="q" placeholder="Ask a question…" autocomplete="off" autofocus />
+    <button id="send" type="submit">Ask</button>
+  </form>
+<script>
+// Standalone frontend — talks to the KAI API (a separate service) over HTTP/CORS.
+// The API base defaults to the local API port; change it in the header to point
+// anywhere. No build step, no framework, no dependencies.
+const log = document.getElementById('log'), q = document.getElementById('q'),
+      f = document.getElementById('f'), send = document.getElementById('send'),
+      apiInput = document.getElementById('api'), keyInput = document.getElementById('key'),
+      fileInput = document.getElementById('file'), filebar = document.getElementById('filebar');
+
+const DEFAULT_API = 'http://localhost:8100';
+apiInput.value = localStorage.getItem('kai_api') ?? DEFAULT_API;
+keyInput.value = localStorage.getItem('kai_key') || '';
+apiInput.onchange = () => localStorage.setItem('kai_api', apiInput.value.trim());
+keyInput.onchange = () => localStorage.setItem('kai_key', keyInput.value.trim());
+const apiBase = () => (apiInput.value.trim().replace(/\/$/, '')); // '' = same origin
+
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function md(s){ // minimal: escape, then links, bold, inline code, newlines
+  s = esc(s);
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s = s.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/`([^`]+)`/g,'<code>$1</code>');
+  return s.replace(/\n/g,'<br>');
+}
+function bubble(cls){ const r=document.createElement('div'); r.className='row '+cls;
+  const b=document.createElement('div'); b.className='bubble'; r.appendChild(b); log.appendChild(r);
+  log.scrollTop=log.scrollHeight; return b; }
+
+function headers(){ const h = {'Content-Type':'application/json'};
+  const k = keyInput.value.trim(); if(k) h['Authorization']='Bearer '+k; return h; }
+
+// Render an /ask or /ask-document JSON answer into an existing bubble element.
+function renderAnswer(el, d, note){
+  el.className = 'bubble' + (d.escalated ? ' escalated' : '');
+  let html = md(d.answer || 'No answer.');
+  const cites = d.escalated ? (d.suggested_sources||[]) : (d.citations||[]);
+  if(cites.length){
+    html += '<div class="sources"><div class="h">'+(d.escalated?'Closest pages (not a confirmed answer)':'Sources')+'</div>'+
+            cites.filter(c=>c.url).map(c=>'• <a href="'+esc(c.url)+'" target="_blank" rel="noopener">'+esc(c.title||c.url)+'</a>').join('<br>')+'</div>';
+  }
+  // On an escalation the score is RETRIEVAL confidence, not answer confidence — showing
+  // it as "confidence 0.73" next to "escalated" reads as a contradiction, so we don't.
+  const pill = d.escalated ? '<span class="pill esc">escalated</span>' : '<span class="pill ok">answered</span>';
+  const meta = d.escalated ? pill + ' · not confident enough — flagged for review'
+                           : pill + ' · confidence ' + (d.confidence??0).toFixed(2);
+  html += '<div class="meta">'+meta+'</div>';
+  if(note && !d.escalated) html += '<div class="meta note">'+esc(note)+'</div>';
+  el.innerHTML = html;
+}
+
+// Shared POST + render. `label` is the user's bubble text; `note` is an italic
+// footnote shown under a confident answer (e.g. the "not saved" reminder).
+async function ask(path, body, label, note){
+  bubble('me').textContent = label;
+  q.value=''; send.disabled=true;
+  const thinking = bubble('kai'); thinking.innerHTML = '<span class="dots">searching the knowledge base</span>';
+  try {
+    const res = await fetch(apiBase()+path, {method:'POST', headers:headers(), body:JSON.stringify(body)});
+    if(!res.ok){ thinking.textContent = res.status===401 ? 'Authentication failed — check the API key.' :
+                 res.status===413 ? 'That file is too large for me to read.' :
+                 'Sorry, something went wrong ('+res.status+').'; return; }
+    renderAnswer(thinking, await res.json(), note);
+  } catch(err){ thinking.textContent = 'Could not reach KAI at '+(apiBase()||'(same origin)')+'. Is the API running, and is CORS allowed?'; }
+  finally { send.disabled=false; q.focus(); log.scrollTop=log.scrollHeight; }
+}
+
+// --- file attachment ---
+let selectedFile = null;
+function clearFile(){ selectedFile=null; fileInput.value=''; filebar.className=''; filebar.innerHTML='';
+  q.placeholder='Ask a question…'; }
+fileInput.onchange = () => {
+  selectedFile = fileInput.files[0] || null;
+  if(!selectedFile){ clearFile(); return; }
+  filebar.className='show';
+  filebar.innerHTML = '<span class="filepill">📎 <b>'+esc(selectedFile.name)+'</b> <span class="x" title="Remove">✕</span></span>'+
+                      '<span class="tag" style="color:var(--muted);font-size:12px">read once for your next question — not saved to the knowledge base</span>';
+  filebar.querySelector('.x').onclick = clearFile;
+  q.placeholder='Ask about this file…'; q.focus();
+};
+function b64(file){ return new Promise((resolve,reject)=>{ const r=new FileReader();
+  r.onerror=()=>reject(r.error); r.onload=()=>resolve(String(r.result).split(',')[1]||''); r.readAsDataURL(file); }); }
+
+document.querySelectorAll('.chip').forEach(c => c.onclick = () => {
+  q.value = c.textContent;
+  if(f.requestSubmit) f.requestSubmit(); else f.dispatchEvent(new Event('submit',{cancelable:true}));
+});
+
+f.onsubmit = async (e) => {
+  e.preventDefault();
+  const text = q.value.trim();
+  if(selectedFile){
+    const file = selectedFile, question = text || ('Summarize '+file.name);
+    const label = (text ? text+'\n' : '') + '📎 '+file.name;
+    clearFile();
+    let content_b64; try { content_b64 = await b64(file); }
+    catch { bubble('kai').textContent = 'Could not read that file.'; return; }
+    await ask('/ask-document', {question, filename:file.name, content_b64}, label,
+              "I read this file just for this question — it isn't saved to the knowledge base.");
+    return;
+  }
+  if(!text) return;
+  await ask('/ask', {question:text}, text, '');
+};
+</script>
+</body>
+</html>
