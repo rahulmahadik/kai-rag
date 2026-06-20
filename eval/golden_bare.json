@@ -1,0 +1,206 @@
+{
+  "_about": "BARE-QUERY golden set: terse keyword/statement queries with NO question words (no 'what/how/when/is'), the way real users often type into a search box. Same grading as golden.json: in_scope should ANSWER (grounded); out_of_scope/adversarial/fake MUST ESCALATE (answering = WRONG). This stresses retrieval on raw keywords, where the keyword-extraction reformulation has the least to strip \u2014 so it checks the gate isn't over-permissive on bare out-of-scope keywords.",
+  "cases": [
+    {
+      "id": "b-replication",
+      "category": "in_scope",
+      "question": "kafka replication purpose durability",
+      "expect_any": [
+        "durability",
+        "availability"
+      ]
+    },
+    {
+      "id": "b-purgatory",
+      "category": "in_scope",
+      "question": "request purgatory",
+      "expect_any": [
+        "purgatory",
+        "request"
+      ]
+    },
+    {
+      "id": "b-controller",
+      "category": "in_scope",
+      "question": "controller role kafka cluster",
+      "expect_any": [
+        "leader",
+        "partition"
+      ]
+    },
+    {
+      "id": "b-zk-offsets",
+      "category": "in_scope",
+      "question": "consumer offsets zookeeper path",
+      "expect_any": [
+        "/consumers",
+        "offset"
+      ]
+    },
+    {
+      "id": "b-mirrormaker",
+      "category": "in_scope",
+      "question": "mirrormaker tool",
+      "expect_any": [
+        "mirror",
+        "replica"
+      ]
+    },
+    {
+      "id": "b-dynamic",
+      "category": "in_scope",
+      "question": "dynamic topic config",
+      "expect_any": [
+        "dynamic",
+        "bouncing",
+        "per-topic",
+        "configuration"
+      ]
+    },
+    {
+      "id": "b-logcleaner",
+      "category": "in_scope",
+      "question": "log cleaner improvements",
+      "expect_any": [
+        "log cleaner",
+        "dedupe",
+        "improvement"
+      ]
+    },
+    {
+      "id": "b-jmx",
+      "category": "in_scope",
+      "question": "jmx metrics reporters",
+      "expect_any": [
+        "ganglia",
+        "jmxtrans",
+        "reporter"
+      ]
+    },
+    {
+      "id": "b-bylaws",
+      "category": "in_scope",
+      "question": "kafka project bylaws voting",
+      "expect_any": [
+        "vot",
+        "role"
+      ]
+    },
+    {
+      "id": "b-migrate",
+      "category": "in_scope",
+      "question": "kafka 0.7 to 0.8 migration",
+      "expect_any": [
+        "migration tool",
+        "embedded",
+        "consumer"
+      ]
+    },
+    {
+      "id": "b-compression",
+      "category": "in_scope",
+      "question": "kafka end to end compression",
+      "expect_any": [
+        "compress",
+        "producer"
+      ]
+    },
+    {
+      "id": "b-purgatory2",
+      "category": "in_scope",
+      "question": "finding topic partition leader",
+      "expect_any": [
+        "metadata",
+        "leader",
+        "simpleconsumer"
+      ]
+    },
+    {
+      "id": "b-vpn",
+      "category": "out_of_scope",
+      "question": "vpn password reset",
+      "expect_escalate": true
+    },
+    {
+      "id": "b-parental",
+      "category": "out_of_scope",
+      "question": "parental leave policy",
+      "expect_escalate": true
+    },
+    {
+      "id": "b-wifi",
+      "category": "out_of_scope",
+      "question": "office wifi password",
+      "expect_escalate": true
+    },
+    {
+      "id": "b-france",
+      "category": "out_of_scope",
+      "question": "capital of france",
+      "expect_escalate": true
+    },
+    {
+      "id": "b-weather",
+      "category": "out_of_scope",
+      "question": "tokyo weather today",
+      "expect_escalate": true
+    },
+    {
+      "id": "b-k8s",
+      "category": "out_of_scope",
+      "question": "kafka kubernetes statefulset helm deploy",
+      "expect_escalate": true
+    },
+    {
+      "id": "b-connect",
+      "category": "adversarial",
+      "question": "kafka connect jdbc postgres source connector",
+      "expect_escalate": true
+    },
+    {
+      "id": "b-kraft",
+      "category": "adversarial",
+      "question": "kraft zookeeper migration",
+      "expect_escalate": true
+    },
+    {
+      "id": "b-streams",
+      "category": "in_scope",
+      "question": "kafka streams dsl application",
+      "expect_any": [
+        "stream"
+      ],
+      "_note": "Kafka Streams IS in the corpus (papers/blog posts); answering with those resources is grounded, not fabrication"
+    },
+    {
+      "id": "b-schema",
+      "category": "adversarial",
+      "question": "schema registry avro serializer",
+      "expect_escalate": true
+    },
+    {
+      "id": "b-prometheus",
+      "category": "adversarial",
+      "question": "prometheus grafana kafka monitoring",
+      "expect_escalate": true
+    },
+    {
+      "id": "b-tiered",
+      "category": "adversarial",
+      "question": "kafka tiered storage s3 offload",
+      "expect_escalate": true
+    },
+    {
+      "id": "b-fake-blockchain",
+      "category": "nonexistent",
+      "question": "kafka blockchain integration proposal",
+      "expect_escalate": true
+    },
+    {
+      "id": "b-fake-graphql",
+      "category": "nonexistent",
+      "question": "kafka graphql api proposal",
+      "expect_escalate": true
+    }
+  ]
+}

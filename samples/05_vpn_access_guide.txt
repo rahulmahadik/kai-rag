@@ -1,0 +1,35 @@
+VPN & Remote Access Guide
+=========================
+
+An original sample document bundled with KAI for demonstration.
+
+Requesting access
+-----------------
+Remote access to internal systems is granted through the VPN. Request access in the
+IT portal under "VPN access"; your manager's approval is required and usually
+completes within one business day.
+
+Connecting
+----------
+1. Install the VPN client from the IT portal.
+2. Sign in with your work account and approve the MFA prompt.
+3. Once connected, you receive an address on the internal network.
+
+Internal network ranges
+-----------------------
+Internal services live on private address ranges (for example 10.0.0.0/8 and
+192.168.0.0/16). These are not reachable from the public internet, which is why the
+VPN is required to reach internal dashboards, databases, and wikis.
+
+Split tunneling
+---------------
+Only traffic to internal ranges goes through the VPN; normal internet browsing does
+not, which keeps the connection fast. Do not disable split tunneling unless the
+infrastructure team asks you to.
+
+Troubleshooting
+---------------
+- "Authentication failed": confirm your password has not expired and approve the MFA
+  prompt within 30 seconds.
+- "Cannot reach internal host": confirm the VPN shows connected and that you are
+  using the internal hostname, not a public one.
