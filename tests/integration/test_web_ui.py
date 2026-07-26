@@ -21,10 +21,13 @@ from pathlib import Path
 
 import pytest
 
-# Skipping locally is fine; skipping in CI is not. A silent skip here would leave the
-# frontend's escaping and URL-scheme guards unverified while the run stayed green.
-_IN_CI = bool(os.environ.get("CI"))
-if not _IN_CI:
+# A silent skip would leave the frontend's escaping and URL-scheme guards
+# unverified while the run stayed green, so the job that OWNS these tests sets
+# KAI_REQUIRE_UI_TESTS and gets a hard failure if the browser is missing.
+# Keying this off CI instead would break every other CI job, since GitHub sets
+# CI=true everywhere but only the integration job installs Playwright.
+_REQUIRE_UI = bool(os.environ.get("KAI_REQUIRE_UI_TESTS"))
+if not _REQUIRE_UI:
     pytest.importorskip("playwright.sync_api", reason="pip install playwright")
 from playwright.sync_api import sync_playwright  # noqa: E402
 
@@ -135,8 +138,8 @@ def browser():
             yield b
             b.close()
     except Exception as exc:  # noqa: BLE001 - the browser build may be absent
-        if _IN_CI:
-            raise  # in CI a missing browser is a broken pipeline, not a skip
+        if _REQUIRE_UI:
+            raise  # this job is meant to have a browser; a missing one is a break
         pytest.skip(f"chromium unavailable: {type(exc).__name__}: {exc}")
 
 

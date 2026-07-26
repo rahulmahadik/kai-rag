@@ -96,6 +96,10 @@ jobs:
     env:
       # Presence of this variable is what un-skips tests/integration.
       KAI_TEST_DATABASE_URL: postgresql://kai:kai@localhost:5432/kai_test
+      # This job installs Chromium below, so the web-UI suite must RUN here.
+      # Without it those tests skip; with it a missing browser fails the job.
+      # Only set for this job: the unit jobs have no Playwright and must skip.
+      KAI_REQUIRE_UI_TESTS: "1"
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
