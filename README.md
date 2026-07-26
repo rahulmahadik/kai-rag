@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)
 [![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-![Version 1.0.0](https://img.shields.io/badge/version-1.0.0-success.svg)
+![Version 1.1.0](https://img.shields.io/badge/version-1.1.0-success.svg)
 
 > ### Ask your docs. Get a cited answer, or an honest "I don't know."
 
