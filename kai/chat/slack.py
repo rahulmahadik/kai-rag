@@ -1,8 +1,8 @@
-"""Slack adapter — second platform proving the ChatAdapter abstraction.
+"""Slack adapter, second platform proving the ChatAdapter abstraction.
 
 Same shape as the Webex adapter: a thin client over KAI's HTTP API, all "what to
 answer" logic delegated to :class:`kai.chat.service.ChatService`. Slack specifics:
-Socket Mode (outbound websocket — NO public URL, like Webex), Block Kit for the
+Socket Mode (outbound websocket: NO public URL, like Webex), Block Kit for the
 feedback buttons (Slack's Adaptive-Card equivalent), ``thread_ts`` threading, and
 mrkdwn link syntax (``<url|text>``) which differs from standard markdown.
 
@@ -10,8 +10,8 @@ Status: COMPLETE but not live-tested here (needs a Slack workspace + the two
 tokens below). Install the extra and set tokens to run:
 
     pip install -e '.[slack]'
-    SLACK_BOT_TOKEN=xoxb-…   # Bot User OAuth token: app_mentions:read, chat:write, im:history
-    SLACK_APP_TOKEN=xapp-…   # App-Level token: connections:write (Socket Mode)
+    SLACK_BOT_TOKEN=xoxb-...   # Bot User OAuth token: app_mentions:read, chat:write, im:history
+    SLACK_APP_TOKEN=xapp-...   # App-Level token: connections:write (Socket Mode)
     CHAT_PLATFORM=slack  python -m kai.bot
 
 The pure helpers (``md_to_mrkdwn``, ``feedback_blocks``) are unit-tested.
@@ -118,14 +118,14 @@ def _slack_start_hint(exc: Exception) -> str | None:
         extra = f" (it currently has '{provided}')" if provided else ""
         return (
             f"Slack rejected the Socket Mode connection: SLACK_APP_TOKEN is missing the "
-            f"'{needed}' scope{extra}. App-level token scopes are fixed at creation — generate "
+            f"'{needed}' scope{extra}. App-level token scopes are fixed at creation, generate "
             "a new App-Level Token at Basic Information → App-Level Tokens with connections:write, "
             "then update SLACK_APP_TOKEN."
         )
     if err in ("invalid_auth", "not_authed", "token_revoked", "account_inactive"):
         return (
             f"Slack rejected the tokens ({err}). Re-check SLACK_BOT_TOKEN (xoxb-) and "
-            "SLACK_APP_TOKEN (xapp-) — they may be wrong, revoked, or from a different app."
+            "SLACK_APP_TOKEN (xapp-). They may be wrong, revoked, or from a different app."
         )
     return None
 
@@ -133,12 +133,12 @@ def _slack_start_hint(exc: Exception) -> str | None:
 def slack_messages(
     reply_md: str, question: str, *, escalated: bool, show_buttons: bool
 ) -> list[dict]:
-    """Build the Slack message payload(s) for one answer — PURE, unit-testable.
+    """Build the Slack message payload(s) for one answer, PURE, unit-testable.
 
     Converts portable markdown → mrkdwn, splits to Slack's per-section limit, and
     attaches feedback controls to the LAST message: 👍/👎/escalate on a confident
     answer, or a single "Escalate to a human" button on an escalation.
-    Returns ``[{text, blocks}, …]``; the adapter just adds channel/thread_ts and
+    Returns ``[{text, blocks}, ...]``; the adapter just adds channel/thread_ts and
     calls ``say``.
     """
 
@@ -167,7 +167,7 @@ class SlackAdapter:
         app_token = getattr(settings, "slack_app_token", "").strip()
         if not bot_token or not app_token:
             raise SystemExit(
-                "Slack needs SLACK_BOT_TOKEN (xoxb-…) and SLACK_APP_TOKEN (xapp-…). "
+                "Slack needs SLACK_BOT_TOKEN (xoxb-...) and SLACK_APP_TOKEN (xapp-...). "
                 "See kai/chat/slack.py for the required scopes."
             )
         # The two tokens are different and easily swapped (a common first-time
@@ -176,7 +176,7 @@ class SlackAdapter:
         # deep inside slack_bolt with a cryptic error, so check the prefixes up front.
         if not bot_token.startswith("xoxb-"):
             swap = (
-                " — that is the App-Level token; put it in SLACK_APP_TOKEN instead"
+                ". That is the App-Level token; put it in SLACK_APP_TOKEN instead"
                 if bot_token.startswith("xapp-")
                 else ""
             )
@@ -187,7 +187,7 @@ class SlackAdapter:
             )
         if not app_token.startswith("xapp-"):
             swap = (
-                " — that is the Bot token; put it in SLACK_BOT_TOKEN instead"
+                ". That is the Bot token; put it in SLACK_BOT_TOKEN instead"
                 if app_token.startswith("xoxb-")
                 else ""
             )

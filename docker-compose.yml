@@ -1,17 +1,17 @@
-# KAI — turnkey stack: the API + Postgres (with pgvector).
+# KAI, turnkey stack: the API + Postgres (with pgvector).
 #
 #   1. cp .env.example .env   and fill in your LLM/embedding endpoint + models
 #   2. docker compose up -d --build
 #   3. seed the knowledge base:  curl -X POST http://localhost:8100/ingest
 #   4. open the chat UI:         http://localhost:3000/   (API itself is :8100)
 #
-# KAI talks to ANY OpenAI-compatible LLM + embedding endpoint — point the
+# KAI talks to ANY OpenAI-compatible LLM + embedding endpoint, point the
 # EMBED_*/LLM_* vars in .env at Ollama, vLLM, llama.cpp, OpenAI, Together, etc.
 # To run the models locally too, uncomment the `ollama` service at the bottom.
 
 services:
   db:
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:pg18
     environment:
       POSTGRES_USER: kai
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kai}
@@ -28,13 +28,18 @@ services:
   kai:
     build:
       context: .
-      # add ",rerank" to pull the cross-encoder (also set RERANKER=cross_encoder)
+      # add ",rerank" to pull the cross-encoder (also set RERANKER below)
       args:
         EXTRAS: bot,slack
     env_file: .env
     environment:
       # point the app at the bundled db service (overrides any .env DATABASE_URL)
       DATABASE_URL: postgresql://kai:${POSTGRES_PASSWORD:-kai}@db:5432/kai
+      # The default image is built WITHOUT the rerank extra, while .env.example
+      # ships RERANKER=cross_encoder. Without this override every question would
+      # fail on the missing sentence-transformers import. To use the reranker, add
+      # ",rerank" to EXTRAS above and set RERANKER=cross_encoder here.
+      RERANKER: ${RERANKER:-noop}
     ports:
       - "8100:8100"
     depends_on:
@@ -42,7 +47,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # Web frontend — a SEPARATE static app (nginx) that calls the API over CORS.
+  # Web frontend: a SEPARATE static app (nginx) that calls the API over CORS.
   frontend:
     image: nginx:alpine
     volumes:

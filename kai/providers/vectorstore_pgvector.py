@@ -18,7 +18,8 @@ purpose: importing this module implies the caller wants the pgvector backend.
 from __future__ import annotations
 
 import re
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import psycopg
 from pgvector.psycopg import register_vector
@@ -116,16 +117,15 @@ class PgVectorStore:
         No-op when the table doesn't exist yet.
         """
 
-        with self._connect() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT format_type(atttypid, atttypmod) FROM pg_attribute "
-                    "WHERE attrelid = to_regclass(%s) AND attname = 'embedding'",
-                    (self._table,),
-                )
-                row = cur.fetchone()
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT format_type(atttypid, atttypmod) FROM pg_attribute "
+                "WHERE attrelid = to_regclass(%s) AND attname = 'embedding'",
+                (self._table,),
+            )
+            row = cur.fetchone()
         if not row or not row[0]:
-            return  # table absent — ensure_schema will create it on ingest
+            return  # table absent, ensure_schema will create it on ingest
         ftype = row[0]  # e.g. "vector(768)" / "halfvec(768)"
         name = ftype.split("(", 1)[0].strip().lower()
         if name != self._vtype:
@@ -176,7 +176,7 @@ class PgVectorStore:
         ).format(
             table=table,
             dim=sql.Literal(dimensions),
-            vtype=sql.SQL(self._vtype),  # validated to {vector, halfvec} — safe
+            vtype=sql.SQL(self._vtype),  # validated to {vector, halfvec}, safe
         )
 
         # IVFFlat / HNSW need a populated table to build well; an HNSW index can
@@ -211,15 +211,12 @@ class PgVectorStore:
             register_vector(conn)
             with conn.cursor() as cur:
                 cur.execute(create_table)
-                cur.execute(create_vec_index)
-                cur.execute(create_ts_index)
-                cur.execute(create_docid_index)
             conn.commit()
             # CREATE TABLE IF NOT EXISTS is a no-op on a pre-existing table, so a
-            # later VECTOR_TYPE change would leave the stored column at its old type
-            # while we believe it is self._vtype — then every query would fail
-            # opaquely ("operator does not exist: vector <=> halfvec"). Detect the
-            # mismatch here and fail loudly with an actionable message instead.
+            # later VECTOR_TYPE change leaves the stored column at its old type.
+            # Check BEFORE the index DDL: `CREATE INDEX ... halfvec_cosine_ops` on a
+            # vector column raises a raw DatatypeMismatch, which would pre-empt this
+            # actionable message.
             with conn.cursor() as cur:
                 cur.execute(
                     "SELECT format_type(atttypid, atttypmod) FROM pg_attribute "
@@ -236,6 +233,11 @@ class PgVectorStore:
                         f"re-ingest into a fresh table: DROP TABLE {self._table}; then "
                         f"ingest again."
                     )
+            with conn.cursor() as cur:
+                cur.execute(create_vec_index)
+                cur.execute(create_ts_index)
+                cur.execute(create_docid_index)
+            conn.commit()
 
     # ------------------------------------------------------------------
     # Write
@@ -273,7 +275,7 @@ class PgVectorStore:
 
         Unlike a separate delete + upsert + set_doc_hash (three transactions), a crash
         can't leave the document half-written (rows deleted but not re-inserted, or a
-        stale hash) — the whole replacement commits or none of it does.
+        stale hash): the whole replacement commits or none of it does.
         """
 
         if not doc_id:
@@ -288,7 +290,7 @@ class PgVectorStore:
                     (doc_id,),
                 )
                 # Only record a hash when we actually stored rows. An empty replacement
-                # deleted the doc — writing a hash would mark a NON-existent doc as
+                # deleted the doc, writing a hash would mark a NON-existent doc as
                 # up-to-date, so the next ingest would skip re-adding it.
                 if rows:
                     cur.executemany(self._insert_sql(), rows)
@@ -302,7 +304,8 @@ class PgVectorStore:
                         cur.execute(
                             sql.SQL(
                                 "INSERT INTO {t} (doc_id, content_hash) VALUES (%s, %s) "
-                                "ON CONFLICT (doc_id) DO UPDATE SET content_hash = EXCLUDED.content_hash"
+                                "ON CONFLICT (doc_id) DO UPDATE SET "
+                                "content_hash = EXCLUDED.content_hash"
                             ).format(t=hashes),
                             (doc_id, content_hash),
                         )
@@ -319,7 +322,7 @@ class PgVectorStore:
                 f"chunks/vectors length mismatch: {len(chunks)} chunks vs {len(vectors)} vectors."
             )
         rows: list[tuple[Any, ...]] = []
-        for chunk, vector in zip(chunks, vectors):
+        for chunk, vector in zip(chunks, vectors, strict=True):
             vec = list(vector)
             if self._dimensions is not None and len(vec) != self._dimensions:
                 raise ValueError(
@@ -378,7 +381,7 @@ class PgVectorStore:
             return []
 
         # The query process never calls ensure_schema, so discover the stored
-        # embedding type+width from the DB once — this activates the width guard
+        # embedding type+width from the DB once. This activates the width guard
         # below AND catches a VECTOR_TYPE/column mismatch up front (clear error)
         # instead of an opaque operator error mid-query.
         if self._dimensions is None:
@@ -486,7 +489,7 @@ class PgVectorStore:
             # OR-fallback probe: websearch_to_tsquery ANDs every term, so a single
             # question word absent from the corpus zeroes out the whole lexical
             # arm. One cheap indexed EXISTS tells us; only then do we enable the
-            # OR-of-terms fallback — every already-validated query (AND has hits)
+            # OR-of-terms fallback, every already-validated query (AND has hits)
             # behaves byte-identically.
             if query_text:
                 with conn.cursor() as cur:
@@ -546,7 +549,7 @@ class PgVectorStore:
         if not doc_id:
             raise ValueError("delete requires a non-empty doc_id.")
         stmt = sql.SQL("DELETE FROM {table} WHERE doc_id = %s").format(table=self._table_ident())
-        # The hashes side table is created lazily, so guard with to_regclass —
+        # The hashes side table is created lazily, so guard with to_regclass,
         # one DO block, no savepoint/rollback dance when it doesn't exist yet.
         with self._connect() as conn:
             with conn.cursor() as cur:
@@ -578,7 +581,7 @@ class PgVectorStore:
     def clear_doc_hashes(self) -> None:
         """Drop the content-hash side table so the next ingest re-embeds EVERY document.
 
-        The live vector rows are left untouched — this is how ``reindex`` forces a full
+        The live vector rows are left untouched. This is how ``reindex`` forces a full
         re-embed in place WITHOUT a destructive table drop.
         """
 
@@ -592,7 +595,7 @@ class PgVectorStore:
             conn.commit()
 
     # ------------------------------------------------------------------
-    # Incremental ingest support — per-doc content hashes in a side table,
+    # Incremental ingest support, per-doc content hashes in a side table,
     # so an unchanged document costs ZERO embedding calls on re-ingest. Kept off
     # the VectorStore Protocol: the ingest pipeline feature-detects via hasattr.
     # ------------------------------------------------------------------
@@ -602,14 +605,13 @@ class PgVectorStore:
         stmt = sql.SQL("SELECT doc_id, content_hash FROM {table}").format(
             table=sql.Identifier(f"{self._table}_hashes")
         )
-        with self._connect() as conn:
-            with conn.cursor() as cur:
-                try:
-                    cur.execute(stmt)
-                    return {r[0]: r[1] for r in cur.fetchall()}
-                except psycopg.errors.UndefinedTable:
-                    conn.rollback()  # first run: the hash side-table isn't created yet
-                    return {}
+        with self._connect() as conn, conn.cursor() as cur:
+            try:
+                cur.execute(stmt)
+                return {r[0]: r[1] for r in cur.fetchall()}
+            except psycopg.errors.UndefinedTable:
+                conn.rollback()  # first run: the hash side-table isn't created yet
+                return {}
                 # Any OTHER DB error propagates: returning {} here would silently
                 # force a full re-embed of the whole corpus with no signal.
 
@@ -639,14 +641,13 @@ class PgVectorStore:
         """
 
         stmt = sql.SQL("SELECT DISTINCT doc_id FROM {table}").format(table=self._table_ident())
-        with self._connect() as conn:
-            with conn.cursor() as cur:
-                try:
-                    cur.execute(stmt)
-                    rows = cur.fetchall()
-                except psycopg.errors.UndefinedTable:
-                    conn.rollback()
-                    return []
+        with self._connect() as conn, conn.cursor() as cur:
+            try:
+                cur.execute(stmt)
+                rows = cur.fetchall()
+            except psycopg.errors.UndefinedTable:
+                conn.rollback()
+                return []
         return [str(row[0]) for row in rows]
 
     # ------------------------------------------------------------------

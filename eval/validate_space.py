@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generic per-space validation — point KAI at ANY Confluence space and prove the
+"""Generic per-space validation, point KAI at ANY Confluence space and prove the
 same code (a) retrieves that corpus, (b) answers its questions, (c) escalates
 everything it can't support (other-domain, out-of-scope, fabrication).
 
@@ -8,7 +8,7 @@ Three checks, increasing cost:
      page's own content retrieved and above the confidence gate?
   2. IN-SCOPE ANSWER (LLM): the content-richest pages, asked plainly, must ANSWER.
   3. SCOPING (LLM): cross-domain (Kafka) + generic OOS + a fabrication probe must
-     ESCALATE — proving nothing is hard-coded to one corpus.
+     ESCALATE, proving nothing is hard-coded to one corpus.
 
     .venv/bin/python eval/validate_space.py --space ZOOKEEPER --table kai_zk --max-docs 50 --ingest
     .venv/bin/python eval/validate_space.py --space ZOOKEEPER --table kai_zk            # validate
@@ -32,7 +32,7 @@ from kai.pipeline.ingest import ingest_from  # noqa: E402
 
 # Other-domain (Kafka) + generic OOS + a fabrication probe. On ANY non-Kafka
 # space these must ESCALATE. The SSL probe asks for exact config that no general
-# wiki will contain verbatim — the fabrication guard must catch it.
+# wiki will contain verbatim: the fabrication guard must catch it.
 SCOPING_PROBES = [
     ("cross-domain", "What is the purpose of replication in Kafka?"),
     ("cross-domain", "How does Kafka partition leader election work?"),
@@ -57,10 +57,9 @@ def _rows(store, query: str):
     import psycopg
     from psycopg import sql
 
-    with psycopg.connect(store._database_url) as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql.SQL(query).format(t=sql.Identifier(store._table)))
-            return cur.fetchall()
+    with psycopg.connect(store._database_url) as conn, conn.cursor() as cur:
+        cur.execute(sql.SQL(query).format(t=sql.Identifier(store._table)))
+        return cur.fetchall()
 
 
 def _retrieve_det(emb, store, s, query: str):

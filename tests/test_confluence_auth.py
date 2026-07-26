@@ -1,4 +1,4 @@
-"""Confluence authentication — every combination, single- and multi-instance.
+"""Confluence authentication, every combination, single- and multi-instance.
 
 Auth rules (per instance, independent of any other instance):
   - email + token  -> HTTP Basic auth (private space)

@@ -96,7 +96,7 @@ def test_slack_md_to_mrkdwn_converts_links_and_bold():
 
 def test_slack_feedback_blocks_have_three_actions():
     blocks = feedback_blocks("what is x?")
-    actions = [b for b in blocks if b["type"] == "actions"][0]["elements"]
+    actions = next(b for b in blocks if b["type"] == "actions")["elements"]
     assert {a["action_id"] for a in actions} == {"kai_fb_up", "kai_fb_down", "kai_fb_escalate"}
 
 
@@ -217,9 +217,10 @@ def test_teams_platform_builds_adapter():
     assert isinstance(build_chat_adapter(_settings(chat_platform="teams")), TeamsAdapter)
 
 
-# ---- Webex REST helpers (edit-in-place + DM) — httpx mocked ----
+# ---- Webex REST helpers (edit-in-place + DM), httpx mocked ----
 def test_webex_create_edit_dm(monkeypatch):
     import httpx as _httpx
+
     from kai.chat import webex as wx
 
     calls = {}
@@ -253,6 +254,7 @@ def test_webex_create_edit_dm(monkeypatch):
 
 def test_webex_helpers_never_raise_on_error(monkeypatch):
     import httpx as _httpx
+
     from kai.chat import webex as wx
 
     def _boom(*a, **k):

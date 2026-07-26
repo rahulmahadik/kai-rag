@@ -8,13 +8,15 @@ and returns the assistant text.
 The class fails loudly:
 
 * missing ``base_url`` / ``api_key`` / ``model`` at construction time;
-* a non-200 HTTP response (status code only — never the raw body);
+* a non-200 HTTP response (status code only: never the raw body);
 * a malformed response that does not contain ``choices[0].message.content``.
 
 This module is loaded only when the real LLM provider is used.
 """
 
 from __future__ import annotations
+
+import threading
 
 import httpx
 
@@ -44,16 +46,31 @@ class OpenAILLM:
         self._api_key = api_key
         self._model = model
         self._timeout = int(timeout)
-        # Reusable client → HTTP keep-alive across completions. Created lazily.
+        # Lazy, reusable client (HTTP keep-alive). Locked: handlers run in a
+        # threadpool, so an unguarded build leaks the loser's connections.
         self._http: httpx.Client | None = None
+        self._http_lock = threading.Lock()
 
     def _client(self) -> httpx.Client:
         if self._http is None:
-            self._http = httpx.Client(timeout=self._timeout)
+            with self._http_lock:
+                if self._http is None:
+                    self._http = httpx.Client(
+                        timeout=self._timeout,
+                        limits=httpx.Limits(max_connections=32, max_keepalive_connections=8),
+                    )
         return self._http
 
+    def close(self) -> None:
+        """Release the pooled connections. Idempotent; safe to call on a fresh client."""
+
+        with self._http_lock:
+            if self._http is not None:
+                self._http.close()
+                self._http = None
+
     @classmethod
-    def from_settings(cls, settings: Settings) -> "OpenAILLM":
+    def from_settings(cls, settings: Settings) -> OpenAILLM:
         """Build an LLM client from a :class:`~kai.config.Settings` instance."""
 
         return cls(

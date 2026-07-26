@@ -1,11 +1,11 @@
-"""Tests for the answer-vs-escalate guards — the 'never give wrong info' core.
+"""Tests for the answer-vs-escalate guards, the 'never give wrong info' core.
 
 Direct coverage of `_looks_like_idk` (the IDK detector) and `_confidence`.
 """
 
-from kai.interfaces import Chunk, ScoredChunk
 import re
 
+from kai.interfaces import Chunk, ScoredChunk
 from kai.pipeline.ask import (
     _answer_grounding,
     _confidence,
@@ -63,7 +63,7 @@ def test_empty_reply_is_idk():
 
 def test_weak_phrase_in_real_content_is_not_idk():
     # A substantive UNCITED answer using a weak phrase about the DOMAIN (not the
-    # sources) must NOT be misread as a refusal — the anchor requirement spares it.
+    # sources) must NOT be misread as a refusal: the anchor requirement spares it.
     assert not _looks_like_idk(
         "The controller could not find an active leader, so it triggers a new "
         "leader election for the partition."
@@ -148,7 +148,7 @@ def test_grounded_dotted_identifier_present_in_source_not_flagged():
 
 def test_fabricated_prefix_of_real_identifier_is_flagged():
     # A fabricated PREFIX of a real source identifier must NOT be excused by a raw
-    # substring match — it's a different (shorter) identifier.
+    # substring match. It's a different (shorter) identifier.
     src = [_sc("The class is org.apache.kafka.connect.Worker in the runtime.")]
     assert "com.foo.bar" in _fabricated_specifics("See com.foo.bar for setup [1].", src)
 
@@ -209,7 +209,7 @@ def test_finalize_no_markers_falls_back_to_top_source():
 
 
 def test_finalize_glued_in_range_marker_is_a_citation():
-    # Models emit "Kafka[1]" with no space — an IN-RANGE glued marker is renumbered.
+    # Models emit "Kafka[1]" with no space: an IN-RANGE glued marker is renumbered.
     scored = [_scu("A", "https://x/a")]
     out, cites = _finalize_citations("Replication in Kafka[1] is durable.", scored)
     assert "[1]" in out and len(cites) == 1
@@ -217,7 +217,7 @@ def test_finalize_glued_in_range_marker_is_a_citation():
 
 def test_finalize_glued_out_of_range_left_alone_not_corrupted():
     # A glued OUT-OF-RANGE bracket in unfenced prose is an array index, not a citation
-    # — it must be left intact (never dropped, which would corrupt the text).
+    # - it must be left intact (never dropped, which would corrupt the text).
     scored = [_scu("A", "https://x/a")]
     out, _ = _finalize_citations("Use cfg[0] and items[5] then see [1].", scored)
     assert "cfg[0]" in out and "items[5]" in out and "[1]" in out
@@ -248,7 +248,7 @@ def test_strip_leaves_inline_citations_untouched():
 
 def test_strip_does_not_touch_sentence_starting_with_marker():
     # A trailing line that starts with a marker but is prose (not a bare ref, no
-    # heading) must be left alone — never delete real content.
+    # heading) must be left alone: never delete real content.
     body = "Setup is done.\n[1] is the most important step, so do it first."
     assert _strip_model_sources_block(body) == body
 
@@ -284,7 +284,7 @@ def test_tidy_leaves_non_editorial_answer_unchanged():
 
 def test_tidy_fixes_space_before_punctuation_and_double_period():
     # Space/tab before punctuation is joined; NEWLINES are deliberately preserved
-    # (folding them corrupted code blocks — see the code-aware tidy).
+    # (folding them corrupted code blocks, see the code-aware tidy).
     assert (
         _tidy_answer("It replicates data . It is durable..") == "It replicates data. It is durable."
     )

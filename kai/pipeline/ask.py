@@ -69,7 +69,7 @@ _IDK_PREFIXES = (
     "i'm unable to answer",
 )
 # Refusal phrases that, in an UNCITED reply, mark an "I don't know" hedge. A
-# genuine answer cites its source ([n]); a hedge does not — so these only fire
+# genuine answer cites its source ([n]); a hedge does not, so these only fire
 # when no citation marker is present.
 #
 # STRONG phrases are self-referential refusals that essentially never occur inside
@@ -89,7 +89,7 @@ _IDK_STRONG = (
 # WEAK phrases ALSO occur naturally in real content ("the controller could not
 # find a leader", "a broker cannot answer a fetch in time"), so they only count as
 # a refusal when paired with a self-referential ANCHOR pointing at the sources /
-# context / question — the shape of an actual "the sources don't cover this" hedge.
+# context / question: the shape of an actual "the sources don't cover this" hedge.
 _IDK_WEAK = (
     "does not contain",
     "doesn't contain",
@@ -122,7 +122,7 @@ _IDK_ANCHORS = (
     "this question",
     "the question",
 )
-# Leading hedges to strip before the opener check ("Unfortunately, I cannot…").
+# Leading hedges to strip before the opener check ("Unfortunately, I cannot...").
 _IDK_HEDGES = (
     "unfortunately,",
     "unfortunately ",
@@ -135,35 +135,22 @@ _IDK_HEDGES = (
     "well,",
 )
 
-# Lexical tokeniser + a small English stopword list. We use a *content*-overlap
-# signal (stopwords excluded) to ground confidence in genuine topical relevance.
-# This matters because the hybrid store returns a
-# rank-fusion score that is NOT an absolute-relevance scale: with a small corpus
-# the top result always scores near the top even for an off-topic query, so the
-# raw score alone cannot tell "answerable" from "unanswerable". The content
-# overlap of the question's meaningful terms against the retrieved chunks can.
+# Content-word overlap (stopwords excluded) grounds confidence in topical
+# relevance. The store's fused score is rank-based, so on a small corpus even an
+# off-topic query scores near the top; overlap distinguishes the two.
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 _STOPWORDS: frozenset[str] = frozenset(
     """
     a an and any are as at be by can do does for from how i in into is it its
     me my no not of on or our the their there this to up us was what when where
     which who whom why will with you your com s t re ll ve
-    """.split()
+    """.split()  # noqa: SIM905 - a wrapped word list reads better than 50 quoted items
 )
 
 
-# Concrete technical specifics a fabricated answer tends to invent: FULLY-QUALIFIED
-# dotted identifiers (3+ segments — class names / multi-part config keys like
-# ``org.postgresql.Driver`` or ``offsets.topic.num.partitions``) and CONFIG-style
-# URIs (``jdbc:…``, ``amqp:…`` — not ordinary http(s) doc links). A grounded
-# answer's specifics are present in its sources; fabricated ones are not. This is
-# DOMAIN-AGNOSTIC — it only diffs the answer against the retrieved text.
-#
-# We deliberately require 3+ dotted segments (not 2) so generic code idioms like
-# ``e.getMessage`` or ``obj.method`` in a legitimate snippet are NOT flagged, and
-# we ignore http(s) URLs (prone to harmless reformatting and lower-risk than an
-# invented driver/config) — the strong fabrication signals (qualified names +
-# config URIs) are what we keep.
+# Specifics a fabricated answer tends to invent: qualified dotted identifiers and
+# config-style URIs. 3+ segments so ordinary idioms like ``obj.method`` are not
+# flagged; http(s) links are ignored (harmless reformatting, low risk).
 _SPECIFIC_DOTTED_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*){2,}\b")
 _SPECIFIC_URI_RE = re.compile(r"(?:[A-Za-z][A-Za-z0-9+.\-]*://|jdbc:)[^\s)\]}>\"']+")
 # Dotted strings that are ordinary prose/abbreviations, not technical specifics.
@@ -172,10 +159,10 @@ _SPECIFIC_IGNORE: frozenset[str] = frozenset(
 )
 
 
-def _cosine(a, b) -> float:  # noqa: ANN001 — float sequences
+def _cosine(a, b) -> float:  # noqa: ANN001 - float sequences
     """Cosine similarity of two equal-length float vectors."""
 
-    dot = sum(x * y for x, y in zip(a, b))
+    dot = sum(x * y for x, y in zip(a, b, strict=True))
     na = math.sqrt(sum(x * x for x in a)) or 1.0
     nb = math.sqrt(sum(y * y for y in b)) or 1.0
     return dot / (na * nb)
@@ -186,8 +173,8 @@ def _content_tokens(text: str) -> frozenset[str]:
     """Meaningful (non-stopword, length>=2) lowercase tokens of ``text``.
 
     Memoized (and returns an immutable frozenset): the same chunk text is tokenised
-    by the confidence gate AND both grounding guards within one request — and again
-    across requests — so caching removes the repeated regex work. Callers union it
+    by the confidence gate AND both grounding guards within one request, and again
+    across requests, so caching removes the repeated regex work. Callers union it
     into a fresh set, never mutate the result, so sharing the cached value is safe.
     """
 
@@ -196,14 +183,11 @@ def _content_tokens(text: str) -> frozenset[str]:
     )
 
 
-# Conversational / imperative lead-ins that carry NO information need but wreck the
-# cross-encoder's relevance score — measured: "show me details of RFC 1918" scores
-# 0.38 (escalates) while bare "RFC 1918" scores 5.3 (answers), same retrieved page.
-# We strip them from the FRONT of the query for retrieval + reranking ONLY; the
-# user's original question is still used for the answer prompt and any escalation
-# ticket. Removing a lead-in can NEVER make an out-of-scope question answerable —
-# the topic (hence the available evidence) is unchanged — so this is safe for the
-# no-fabrication invariant, and the full gate is re-validated after.
+# Lead-ins carry no information but wreck the cross-encoder's score: "show me
+# details of RFC 1918" scores 0.38, bare "RFC 1918" scores 5.3, same page. Stripped
+# for retrieval and rerank only; the original question still drives the prompt and
+# the ticket. The topic is unchanged, so this cannot make an out-of-scope question
+# answerable.
 _QUERY_LEADINS = (
     "can you please tell me about",
     "can you please tell me",
@@ -330,7 +314,7 @@ def ask(question: str, providers: tuple, settings: Settings) -> Answer:
     """Answer ``question`` end to end, escalating when KAI is not confident.
 
     ``providers`` is the 5-tuple from :func:`kai.factory.build_providers`
-    — ``(embedder, llm, store, kb, tracker)``.
+    - ``(embedder, llm, store, kb, tracker)``.
     """
 
     embedder, llm, store, _kb, tracker = providers
@@ -369,123 +353,77 @@ def _answer_from_retrieval(
     """Produce a grounded :class:`Answer` from already-retrieved chunks.
 
     Shared by :func:`answer_question` (corpus retrieval) and the ad-hoc document
-    Q&A path (in-memory retrieval over an uploaded file) — identical gate + guards,
-    so an answer about a dropped PDF is held to the same never-fabricate bar.
+    Q&A path, so an answer about a dropped PDF passes the same gate and guards.
     """
 
-    # 4. Confidence from retrieval strength (computed BEFORE the LLM call so the
-    #    escalate decision is grounded in retrieval, not the model's prose).
+    # Confidence comes from retrieval, computed before the LLM call, so the
+    # escalate decision rests on evidence rather than on the model's prose.
     confidence = _confidence(
         question,
         scored,
         rerank_is_prob=getattr(settings, "rerank_score_is_probability", False),
     )
-    cleared = bool(scored) and confidence >= settings.confidence_threshold
 
-    # 5. If retrieval already fails the gate, escalate WITHOUT spending an LLM
-    #    generation — the decision is retrieval-based, so the model's output would
-    #    just be discarded. (Saves a full 14B generation on every out-of-scope Q.)
-    if not cleared:
+    def escalate(draft: str) -> Answer:
+        """Escalate with this request's context. One call site per guard below."""
+
         return _escalate(
             question,
             scored,
-            "",
+            draft,
             confidence,
             tracker,
             include_draft=getattr(settings, "escalation_include_draft", False),
         )
 
-    # 6. Cleared: build the grounded prompt and ask the LLM. The model is a SECOND
-    #    guard — if it cannot answer from the context (IDK), we still escalate.
+    # Retrieval already failed the gate: escalate without spending a generation.
+    if not scored or confidence < settings.confidence_threshold:
+        return escalate("")
+
+    # Cleared. The model is the second guard: if it cannot answer from the
+    # context it replies IDK and we escalate anyway.
     system, user = build_prompt(question, scored)
-    # temperature=0 -> DETERMINISTIC answers: the same question yields the same
-    # answer (and therefore a stable answer/escalate decision) every time, with no
-    # random mid-sentence endings or run-to-run flip-flopping. Greedy decoding also
-    # gives the most-likely (most faithful) phrasing — the right choice for grounded
-    # knowledge QA. (multi-query and verify already run at temperature 0.)
+    # temperature=0 keeps answers deterministic, so a question's answer/escalate
+    # decision is stable run to run.
     raw_answer = llm.complete(
         system,
         user,
         max_tokens=getattr(settings, "answer_max_tokens", 1024),
         temperature=0.0,
     ).strip()
-    # Tidy presentation: drop editorialising openers ("Based on the provided
-    # context, …") the prompt forbids but the model sometimes emits, and clean up
-    # whitespace / space-before-punctuation artifacts.
+    # Drop editorialising openers the prompt forbids, and tidy whitespace.
     raw_answer = _tidy_answer(raw_answer)
     if not raw_answer or _looks_like_idk(raw_answer):
-        return _escalate(
-            question,
-            scored,
-            raw_answer,
-            confidence,
-            tracker,
-            include_draft=getattr(settings, "escalation_include_draft", False),
-        )
+        return escalate(raw_answer)
 
-    # Defensive: strip a contradictory trailing "I don't know" the model sometimes
-    # appends after giving real information (answer-or-IDK, never both).
+    # The model sometimes appends an IDK after giving real information.
     raw_answer = _strip_trailing_idk(raw_answer)
 
-    # Deterministic grounding guards (always on, no LLM):
-    #  (a) the answer states concrete specifics — qualified class names, config
-    #      URIs — that appear NOWHERE in the sources (egregious fabrication); or
-    #  (b) too little of the answer's vocabulary is drawn from the sources at all
-    #      (vague prose fabrication the token check (a) misses).
-    # Either way the answer is not really grounded — escalate rather than ship a
-    # confident, wrongly-cited answer. Catches fabrication the model's own verify
-    # pass lets through (critical with a weaker LLM).
+    # Deterministic grounding guards, always on, no LLM call.
+    # (a) concrete specifics (qualified names, config URIs) absent from every source.
     if _fabricated_specifics(raw_answer, scored):
-        return _escalate(
-            question,
-            scored,
-            raw_answer,
-            confidence,
-            tracker,
-            include_draft=getattr(settings, "escalation_include_draft", False),
-        )
-    # (c) the answer states a SIGNIFICANT number absent from every source — catches
-    # recombination/computation fabrication (e.g. inventing a total or count) that
-    # the bag-of-words overlap below misses. Always on; applies to short answers too.
+        return escalate(raw_answer)
+    # (b) a significant number absent from every source: invented totals and counts.
     bad_number = _fabricated_numbers(raw_answer, scored)
     if bad_number is not None:
         logger.info("kai_fabricated_number_escalate value=%r", bad_number)
-        return _escalate(
-            question,
-            scored,
-            raw_answer,
-            confidence,
-            tracker,
-            include_draft=getattr(settings, "escalation_include_draft", False),
-        )
+        return escalate(raw_answer)
+    # (c) too little of the answer's vocabulary drawn from the sources at all.
     grounding_min = getattr(settings, "answer_grounding_min", 0.0) or 0.0
     if grounding_min > 0 and len(_content_tokens(raw_answer)) >= 12:
         src_tokens: set[str] = set()
         for sc in scored:
             src_tokens |= _content_tokens(f"{sc.chunk.title} {sc.chunk.text}")
-        # Only apply the overlap guard when the sources are SUBSTANTIAL. A thin
-        # page (few content words — e.g. a stub) cannot cover a natural answer's
-        # vocabulary, so a low overlap there is not a fabrication signal (it just
-        # penalises a faithful answer to a terse page). Fabrication on a thin /
-        # named-only source is still caught by the IDK check, the verify pass, and
-        # the qualified-specific-token check.
+        # Thin sources can't cover a faithful answer's vocabulary, so low overlap
+        # there is not a fabrication signal. Guards (a), IDK and verify still apply.
         if (
             len(src_tokens) >= _GROUNDING_MIN_SOURCE_TOKENS
             and _answer_grounding(raw_answer, scored) < grounding_min
         ):
-            return _escalate(
-                question,
-                scored,
-                raw_answer,
-                confidence,
-                tracker,
-                include_draft=getattr(settings, "escalation_include_draft", False),
-            )
+            return escalate(raw_answer)
 
-    # Sentence-level grounding (flag-gated): every substantive prose sentence
-    # must be semantically supported by a retrieved chunk. Catches recombination
-    # fabrication that the bag-of-words overlap above misses. OFF by default —
-    # enable only after validating the floor against the golden eval.
+    # Sentence-level grounding (off by default): every substantive prose sentence
+    # must be semantically supported by a retrieved chunk.
     if getattr(settings, "sentence_grounding", False):
         bad = _unsupported_sentences(
             raw_answer,
@@ -501,52 +439,25 @@ def _answer_from_retrieval(
                 len(bad),
                 bad[0][:80],
             )
-            return _escalate(
-                question,
-                scored,
-                raw_answer,
-                confidence,
-                tracker,
-                include_draft=getattr(settings, "escalation_include_draft", False),
-            )
+            return escalate(raw_answer)
 
-    # Second-pass verification: confirm the answer is supported by its sources AND
-    # about the right subject — else escalate rather than risk false info.
+    # Second pass: confirm the answer is supported by its sources and about the
+    # right subject.
     if getattr(settings, "verify_answers", False):
         from kai.pipeline.verify import verify_answer
 
         if not verify_answer(llm, question, raw_answer, scored):
-            return _escalate(
-                question,
-                scored,
-                raw_answer,
-                confidence,
-                tracker,
-                include_draft=getattr(settings, "escalation_include_draft", False),
-            )
+            return escalate(raw_answer)
 
-    # Renumber the answer's [n] markers so they match the de-duplicated Sources
-    # list 1:1 (a long single page is many chunks, so markers like [1]..[8] can all
-    # resolve to ONE source — that mismatch is what made the answer look like it had
-    # 8 references next to a single link).
+    # Renumber [n] markers to match the de-duplicated Sources list 1:1. A long page
+    # is many chunks, so [1]..[8] can all resolve to one source.
     raw_answer, citations = _finalize_citations(raw_answer, scored)
-    # Re-tidy: collapsing/dropping markers above can leave a " ." gap, so run the
-    # whitespace/punctuation cleanup once more on the final text.
+    # Dropping markers can leave a " ." gap, so tidy once more.
     raw_answer = _tidy_answer(raw_answer)
-    # Never ship an EMPTY confident answer: if stripping a model-emitted "Sources:"
-    # block / markers left nothing, there's no real content to stand behind — escalate.
+    # Never ship an empty confident answer.
     if not raw_answer.strip():
-        return _escalate(
-            question,
-            scored,
-            raw_answer,
-            confidence,
-            tracker,
-            include_draft=getattr(settings, "escalation_include_draft", False),
-        )
-    # Provenance: if this answer drew on a CURATED entry (Inform loop), label it so
-    # the user knows it's community-reviewed, not official docs — lower implicit
-    # trust than a Confluence-sourced answer, and a cue to 👎 it if wrong.
+        return escalate(raw_answer)
+    # Label curated (Inform loop) answers: community-reviewed, not official docs.
     if any(getattr(sc.chunk, "space", "") == "kai-curated" for sc in scored):
         raw_answer = raw_answer.rstrip() + (
             "\n\n_Note: this is a community-curated answer (reviewed & approved), "
@@ -562,7 +473,7 @@ def _answer_from_retrieval(
 
 
 class _NoTracker:
-    """Tracker that files nothing — ad-hoc document Q&A doesn't open Jira tickets."""
+    """Tracker that files nothing: ad-hoc document Q&A opens no Jira ticket."""
 
     def create_issue(self, title: str, body: str) -> str:  # noqa: ARG002
         return ""
@@ -629,7 +540,7 @@ def answer_from_document(
     qvec = embedder.embed([f"{qp}{question}"])[0]
 
     scored = []
-    for i, (p, cv) in enumerate(zip(pieces, chunk_vecs)):
+    for i, (p, cv) in enumerate(zip(pieces, chunk_vecs, strict=True)):
         sc = _cosine(qvec, cv)  # compute once (previously evaluated twice per chunk)
         scored.append(
             ScoredChunk(
@@ -718,7 +629,7 @@ def retrieve(
 
     seen_ids: set[str] = set()
     candidates: list[ScoredChunk] = []
-    for q, qvec in zip(queries, qvecs):
+    for q, qvec in zip(queries, qvecs, strict=True):
         for sc in store.search(query_vector=qvec, query_text=q, top_k=n_retrieve):
             if sc.chunk.id not in seen_ids:
                 seen_ids.add(sc.chunk.id)
@@ -771,8 +682,8 @@ def _confidence(question: str, scored: list[ScoredChunk], rerank_is_prob: bool =
     The store's fused score is rank-based, not an absolute-relevance scale (a
     small corpus pushes the top hit near 1.0 even for an off-topic query), so it
     cannot stand alone. We instead measure how many of the question's *meaningful*
-    terms (stopwords removed) actually appear in the retrieved chunks — the
-    fraction of the question that the knowledge base demonstrably covers — and
+    terms (stopwords removed) actually appear in the retrieved chunks, the
+    fraction of the question that the knowledge base demonstrably covers, and
     weight it by the store's own confidence in the top hit. The result is high
     when retrieval returned on-topic content and low (→ escalate) when it did not.
     """
@@ -780,17 +691,15 @@ def _confidence(question: str, scored: list[ScoredChunk], rerank_is_prob: bool =
     if not scored:
         return 0.0
 
-    # PRIMARY signal: best cosine similarity of the question vs any retrieved
-    # chunk — an ABSOLUTE relevance measure. (The fusion ``score`` is rank-based
-    # and sits near 1.0 even for an off-topic query on a small corpus, so it
-    # cannot tell "answerable" from "off-topic"; cosine similarity can.) This is
-    # the guard that makes KAI escalate rather than answer an out-of-scope
-    # question from a weakly-related chunk — critical for enterprise accuracy.
+    # Primary signal: best cosine similarity of question vs any retrieved chunk.
+    # Unlike the rank-based fusion score, this is absolute, so it can tell
+    # "answerable" from "off-topic" and is what makes KAI escalate rather than
+    # answer from a weakly-related chunk.
     best_sim = max((max(0.0, sc.vector_score) for sc in scored), default=0.0)
     best_sim = max(0.0, min(1.0, best_sim))
 
     # If a cross-encoder reranked the candidates, fold its (calibrated) relevance
-    # into the primary signal — it scores (query, chunk) jointly and is far more
+    # into the primary signal. It scores (query, chunk) jointly and is far more
     # discriminative than cosine, especially at telling off-topic from on-topic.
     rerank_scores = [sc.rerank_score for sc in scored if sc.rerank_score is not None]
     if rerank_scores:
@@ -803,7 +712,7 @@ def _confidence(question: str, scored: list[ScoredChunk], rerank_is_prob: bool =
             if not (-0.01 <= best_rr <= 1.01):
                 logger.warning(
                     "rerank_score %.3f is outside [0,1] but "
-                    "rerank_score_is_probability=True — likely a reranker_model/flag "
+                    "rerank_score_is_probability=True, likely a reranker_model/flag "
                     "mismatch; confidence will be miscalibrated.",
                     best_rr,
                 )
@@ -851,7 +760,7 @@ def _looks_like_idk(text: str) -> bool:
             break
     if opener.startswith(_IDK_PREFIXES):
         return True
-    # Only consider refusal phrases when the reply is UNCITED — a genuine answer
+    # Only consider refusal phrases when the reply is UNCITED: a genuine answer
     # carries a [n] citation (an answer that says "source [1] does not contain X"
     # in passing still passes, via the marker).
     if "[" not in low:
@@ -859,19 +768,16 @@ def _looks_like_idk(text: str) -> bool:
         if any(w in low for w in _IDK_STRONG):
             return True
         # WEAK phrases (which also appear in real content) only count when paired
-        # with an anchor pointing at the sources/context — so a substantive answer
+        # with an anchor pointing at the sources/context, so a substantive answer
         # that merely says "the broker could not find a leader" is NOT discarded.
         if any(w in low for w in _IDK_WEAK) and any(a in low for a in _IDK_ANCHORS):
             return True
     return False
 
 
-# Minimum total source content-tokens for the overlap grounding guard to apply.
-# Below this the cited pages are too thin to cover a faithful answer's vocabulary
-# (measured: a stub page ~105 tokens; a short single-page source ~171 tokens
-# false-positived a CORRECT, verify-passing answer at overlap 0.438; real
-# multi-chunk answers 360-650+), so the overlap signal would false-positive.
-# Other guards (IDK, verify, specific tokens) still cover thin/named-only sources.
+# Below this many source content-tokens the cited pages are too thin to cover a
+# faithful answer's vocabulary (a 171-token source false-positived a correct answer
+# at overlap 0.438), so the overlap guard is skipped. The other guards still apply.
 _GROUNDING_MIN_SOURCE_TOKENS = 200
 
 
@@ -891,7 +797,7 @@ def _answer_grounding(answer: str, scored: list[ScoredChunk]) -> float:
 
 
 def _norm_alnum(s: str) -> str:
-    """Lowercase, strip everything but [a-z0-9] — for loose substring matching."""
+    """Lowercase, strip everything but [a-z0-9], for loose substring matching."""
 
     return re.sub(r"[^a-z0-9]", "", s.lower())
 
@@ -901,7 +807,7 @@ def _fabricated_specifics(answer: str, scored: list[ScoredChunk]) -> list[str]:
 
     Returns the dotted identifiers / URIs the answer states that do not appear in
     any retrieved chunk (title + text). A non-empty result means the answer
-    invented specifics from outside knowledge — the pipeline escalates instead of
+    invented specifics from outside knowledge: the pipeline escalates instead of
     shipping them. Deterministic and corpus-agnostic; never consults the model
     (so it catches fabrication the model's own verify pass misses).
     """
@@ -911,7 +817,7 @@ def _fabricated_specifics(answer: str, scored: list[ScoredChunk]) -> list[str]:
     src = " ".join(f"{sc.chunk.title} {sc.chunk.text}" for sc in scored).lower()
     # The dotted identifiers / URIs that ACTUALLY appear in the source, normalized.
     # A fabricated specific is "grounded" only when the source genuinely contains that
-    # identifier — NOT when its letters happen to appear contiguously across separate
+    # identifier: NOT when its letters happen to appear contiguously across separate
     # source words (the old blind alnum-substring test let "meta.data.cache" pass on
     # the prose "metadata cache").
     src_specifics: set[str] = {_norm_alnum(t) for t in _SPECIFIC_URI_RE.findall(src)}
@@ -920,7 +826,7 @@ def _fabricated_specifics(answer: str, scored: list[ScoredChunk]) -> list[str]:
     }
 
     candidates: set[str] = set()
-    # Collect config-style URIs first (skip http(s) doc links — low-risk and prone
+    # Collect config-style URIs first (skip http(s) doc links, low-risk and prone
     # to harmless reformatting), then STRIP all URIs from the text so a multi-part
     # domain inside a URL (e.g. ``sub.example.com``) isn't re-matched as a dotted
     # identifier.
@@ -940,7 +846,7 @@ def _fabricated_specifics(answer: str, scored: list[ScoredChunk]) -> list[str]:
         if not norm:
             continue
         # Grounded ONLY if the source contains an identifier that normalizes the same
-        # (whole-token match). A raw `tok in src` substring test is dropped — it let a
+        # (whole-token match). A raw `tok in src` substring test is dropped. It let a
         # fabricated PREFIX of a real source identifier (e.g. "a.b.c" inside source's
         # "a.b.c.d") pass.
         if norm in src_specifics:
@@ -954,7 +860,7 @@ def _fabricated_specifics(answer: str, scored: list[ScoredChunk]) -> list[str]:
 # sits between 3-digit groups, so a sentence comma ("3, 4, 5") is never glued on.
 _NUMBER_RE = re.compile(r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?", re.ASCII)
 # IPv4 addresses and dotted version strings (3+ components) are structure, not
-# stated facts — mask them before extraction so octets / version parts aren't flagged.
+# stated facts, mask them before extraction so octets / version parts aren't flagged.
 _DOTTED_RUN_RE = re.compile(r"\bv?\d+(?:\.\d+){2,}\b", re.ASCII)
 
 
@@ -967,7 +873,7 @@ def _canon_num(s: str) -> str:
     """
 
     if s.isdigit():
-        # Pure integer — compare exactly. Python ints are arbitrary-precision, so a
+        # Pure integer, compare exactly. Python ints are arbitrary-precision, so a
         # huge value (> 2^53) keeps every digit instead of collapsing via float().
         return s.lstrip("0") or "0"
     try:
@@ -982,22 +888,25 @@ def _canon_num(s: str) -> str:
 def _fabricated_numbers(answer: str, scored: list[ScoredChunk]) -> str | None:
     """A SIGNIFICANT number stated in ``answer`` that appears in NO source.
 
-    Catches recombination/computation fabrication — the model inventing a total,
-    count, or measured value (e.g. "16,384 x 254 = 4,160,768", a BLEU of 28.7, or an
-    order of magnitude like 1e9) absent from the sources. Deterministic, corpus-
-    agnostic, never consults the model. A number is "significant" if it has a
-    thousands separator, a decimal point, an exponent, or >= 5 integer digits — so
-    common small integers (years, ports, list ordinals, enumeration commas) don't
-    trip it. Citation markers and IP/version strings are masked first; source numbers
-    are matched as WHOLE tokens, so a fabricated value can't hide inside a larger
-    source number. Returns the offending token, or None when every number is grounded.
+    Catches recombination fabrication: an invented total, count or measured value.
+    "Significant" means a thousands separator, a decimal point, an exponent, or
+    >= 5 integer digits, so years, ports and list ordinals don't trip it. Citation
+    markers and IP/version strings are masked out of the answer first. Returns the
+    offending token, or None when every number is grounded.
     """
 
     if not answer or not scored:
         return None
     text = _DOTTED_RUN_RE.sub(" ", re.sub(r"\[\d+\]", " ", answer))
-    src = _DOTTED_RUN_RE.sub(" ", " ".join(f"{sc.chunk.title} {sc.chunk.text}" for sc in scored))
-    src_canon = {_canon_num(m.replace(",", "")) for m in _NUMBER_RE.findall(src)}
+    raw_src = " ".join(f"{sc.chunk.title} {sc.chunk.text}" for sc in scored)
+    # Scan the source both masked and raw. Masking alone hid the components of a
+    # version string, so an answer citing "1.15" against a source saying "1.15.0"
+    # was flagged as fabricated. Digits present in the source text are grounded.
+    src_canon = {
+        _canon_num(m.replace(",", ""))
+        for text_form in (_DOTTED_RUN_RE.sub(" ", raw_src), raw_src)
+        for m in _NUMBER_RE.findall(text_form)
+    }
     for tok in _NUMBER_RE.findall(text):
         norm = tok.replace(",", "")
         int_part = norm.split(".")[0].split("e")[0].split("E")[0]
@@ -1010,7 +919,7 @@ def _fabricated_numbers(answer: str, scored: list[ScoredChunk]) -> str | None:
 
 def _strip_trailing_idk(text: str) -> str:
     """Remove a contradictory trailing "I don't know" hedge from a substantive
-    answer — the model sometimes appends one after giving real, cited information.
+    answer: the model sometimes appends one after giving real, cited information.
     Only strips trailing refusal lines; never empties a real answer."""
 
     lines = text.rstrip().splitlines()
@@ -1020,12 +929,12 @@ def _strip_trailing_idk(text: str) -> str:
     return cleaned or text
 
 
-# Editorialising openers the prompt forbids ("answer directly … do NOT editorialize
+# Editorialising openers the prompt forbids ("answer directly ... do NOT editorialize
 # about what the sources do or do not contain") but a weaker model still emits.
 # Stripped from the START of an answer only, longest-first.
 # Fenced code blocks (``` ... ```, tolerant of an unterminated trailing fence) and
 # inline backtick spans. Used to EXCLUDE code from prose tidying and citation
-# rewriting — both were corrupting code (deleted (), [], collapsed indentation).
+# rewriting, both were corrupting code (deleted (), [], collapsed indentation).
 # re.split with the capture group keeps the code segments at odd indices.
 _CODE_SEGMENT_RE = re.compile(r"(```.*?(?:```|$)|`[^`\n]+`)", re.DOTALL)
 
@@ -1061,7 +970,7 @@ def _tidy_answer(text: str) -> str:
             if t:
                 t = t[0].upper() + t[1:]
             break
-    # Tidy PROSE only — code must pass through untouched. Fenced blocks and inline
+    # Tidy PROSE only, code must pass through untouched. Fenced blocks and inline
     # backtick spans are split out first; the cleanup rules run on the prose
     # segments and the pieces are reassembled. Inside prose, rules are scoped so
     # legitimate code-like text survives even unfenced: indentation (leading
@@ -1069,13 +978,13 @@ def _tidy_answer(text: str) -> str:
     # newlines are never folded into punctuation joins.
     out: list[str] = []
     for i, seg in enumerate(_CODE_SEGMENT_RE.split(t)):
-        if i % 2 == 1:  # a fenced block / inline code span — verbatim
+        if i % 2 == 1:  # a fenced block / inline code span, verbatim
             out.append(seg)
             continue
         seg = re.sub(r"(?<=\S)[ \t]{2,}", " ", seg)  # intra-line runs (not indentation)
         seg = re.sub(r"[ \t]+([.,;:!?])", r"\1", seg)  # space/tab before punctuation (not \n)
         # Standalone empty brackets/parens (citation-drop artifacts): only when
-        # free-standing — never glued to an identifier like ``f()`` or ``items[]``.
+        # free-standing: never glued to an identifier like ``f()`` or ``items[]``.
         seg = re.sub(r"(?<!\S)\(\s*\)(?=\s|$|[.,;:!?])", "", seg)
         seg = re.sub(r"(?<!\S)\[\s*\](?=\s|$|[.,;:!?])", "", seg)
         seg = re.sub(r"(?<!\.)\.\.(?!\.)", ".", seg)  # stray double period -> one
@@ -1116,14 +1025,14 @@ def _unsupported_sentences(
     )
     sent_vecs, chunk_vecs = vectors[: len(sentences)], vectors[len(sentences) :]
 
-    def _cos(a, b) -> float:  # noqa: ANN001 — float sequences
-        dot = sum(x * y for x, y in zip(a, b))
+    def _cos(a, b) -> float:  # noqa: ANN001 - float sequences
+        dot = sum(x * y for x, y in zip(a, b, strict=True))
         na = math.sqrt(sum(x * x for x in a)) or 1.0
         nb = math.sqrt(sum(y * y for y in b)) or 1.0
         return dot / (na * nb)
 
     unsupported: list[str] = []
-    for s, sv in zip(sentences, sent_vecs):
+    for s, sv in zip(sentences, sent_vecs, strict=True):
         best = max((_cos(sv, cv) for cv in chunk_vecs), default=0.0)
         if best < floor:
             unsupported.append(s)
@@ -1146,7 +1055,7 @@ def _citations_from(scored: list[ScoredChunk]) -> list[Citation]:
 
 
 # A trailing "Sources:" / "References:" list the model sometimes appends despite the
-# inline-citation instruction — bare [n] markers (often duplicated, e.g. "[1] [2] [2]")
+# inline-citation instruction, bare [n] markers (often duplicated, e.g. "[1] [2] [2]")
 # that the UI and chat layers would then render a SECOND time. We strip it; the real,
 # de-duplicated Sources list is built from the citations, not the model's prose.
 _SOURCES_HEADING_RE = re.compile(
@@ -1163,7 +1072,7 @@ def _strip_model_sources_block(text: str) -> str:
     reference list is redundant with the de-duplicated Sources the UI/chat render from
     the citations, and often arrives mangled (e.g. ``[1] [2] [2]``). Only a trailing
     block under a Sources heading, OR a trailing run of *bare* ``[n]`` lines, is
-    removed — prose (including a sentence that merely starts with a marker) is left
+    removed, prose (including a sentence that merely starts with a marker) is left
     untouched.
     """
 
@@ -1194,7 +1103,7 @@ def _finalize_citations(raw_answer: str, scored: list[ScoredChunk]) -> tuple[str
 
     The prompt numbers every retrieved chunk 1..N, but a long page is split into
     many chunks, so a thorough answer can carry markers like ``[1]..[8]`` that all
-    resolve to the SAME source URL — which made the answer look like it had eight
+    resolve to the SAME source URL: which made the answer look like it had eight
     references next to a single Sources link. Here we collapse the cited chunks to
     their UNIQUE sources (by URL) and rewrite the inline markers so the numbers in
     the answer correspond 1:1 to the Sources list, numbered in the order the
@@ -1206,15 +1115,15 @@ def _finalize_citations(raw_answer: str, scored: list[ScoredChunk]) -> tuple[str
     emitted no usable markers, so a confident answer always carries one citation.
     """
 
-    # Drop any trailing "Sources:"/"References:" list the model tacked on — the real
+    # Drop any trailing "Sources:"/"References:" list the model tacked on: the real
     # Sources block is rendered from the citations below, so the model's copy is just
     # redundant (and often mangled, e.g. "[1] [2] [2]") clutter.
     raw_answer = _strip_model_sources_block(raw_answer or "")
 
-    # Work over PROSE segments only — bracketed numbers inside code (``ports[0]``,
+    # Work over PROSE segments only, bracketed numbers inside code (``ports[0]``,
     # fenced examples) are array indices, not citations, and must never be deleted
     # or renumbered. Within prose, a ``[n]`` counts as a citation marker only when
-    # it is NOT glued to an identifier (``argv[1]``) — except that a marker may
+    # it is NOT glued to an identifier (``argv[1]``), except that a marker may
     # directly follow another marker (``[1][2]``), which models legitimately emit.
     segments = _CODE_SEGMENT_RE.split(raw_answer)
 
@@ -1222,10 +1131,10 @@ def _finalize_citations(raw_answer: str, scored: list[ScoredChunk]) -> tuple[str
         """(start, end, n) for each bracketed number in ``seg`` that is a citation.
 
         Code/inline-backtick spans are already split out, so within PROSE a ``[n]`` is
-        a citation when it is NOT glued to a word char (the normal ``… [1]``), OR it
+        a citation when it is NOT glued to a word char (the normal ``... [1]``), OR it
         chains another marker (``[1][2]``), OR it is glued but IN RANGE (``Kafka[1]``,
         which models emit). A glued, OUT-OF-RANGE ``[n]`` is almost certainly an array
-        index in unfenced prose (``arr[0]``, ``items[99]``) — left untouched.
+        index in unfenced prose (``arr[0]``, ``items[99]``), left untouched.
         """
 
         found: list[tuple[int, int, int]] = []
@@ -1243,7 +1152,7 @@ def _finalize_citations(raw_answer: str, scored: list[ScoredChunk]) -> tuple[str
     per_seg = [_markers(seg) if i % 2 == 0 else [] for i, seg in enumerate(segments)]
     valid = {n for ms in per_seg for (_, _, n) in ms if 1 <= n <= len(scored)}
     if not valid:
-        # No usable [n] markers — but there may be out-of-range phantom markers; drop
+        # No usable [n] markers, but there may be out-of-range phantom markers; drop
         # them so they don't show next to the single fallback citation. Cite the
         # source whose text best overlaps the answer (not merely the top-ranked one).
         cleaned_parts = []
@@ -1301,7 +1210,7 @@ def _finalize_citations(raw_answer: str, scored: list[ScoredChunk]) -> tuple[str
             parts.append(seg[cursor:start])
             if n in remap:
                 parts.append(f"[{remap[n]}]")
-            # else: an out-of-range CITATION marker (hallucinated ref) — drop it.
+            # else: an out-of-range CITATION marker (hallucinated ref), drop it.
             # Non-citation brackets were never classified, so code/indices survive.
             cursor = end
         parts.append(seg[cursor:])
@@ -1326,12 +1235,12 @@ def _escalate(
     title = "KAI could not answer: " + " ".join(question.split())
     try:
         escalation_url = (tracker.create_issue(title=title, body=body) or "").strip()
-    except Exception as exc:  # noqa: BLE001 — the safety-net path must never 500
-        # Tracker outage (e.g. Jira down/4xx): degrade to the no-URL message — the
+    except Exception as exc:  # noqa: BLE001 - the safety-net path must never 500
+        # Tracker outage (e.g. Jira down/4xx): degrade to the no-URL message, the
         # user still gets the correct escalated answer, and the failure is logged
         # loudly for the operator instead of surfacing as an HTTP 500.
         logger.error(
-            "kai_escalation_failed err=%s: %s — escalation NOT ticketed: %r",
+            "kai_escalation_failed err=%s: %s, escalation NOT ticketed: %r",
             type(exc).__name__,
             exc,
             question[:160],
@@ -1343,7 +1252,7 @@ def _escalate(
             f"raised a ticket for a human to follow up: {escalation_url}"
         )
     else:
-        # No external tracker wired (LocalTracker) — no fake link.
+        # No external tracker wired (LocalTracker): no fake link.
         message = (
             "I couldn't answer this confidently from the knowledge base, so I've "
             "flagged it for a human to review."
@@ -1383,11 +1292,11 @@ def _escalation_body(
         lines.append("Closest knowledge-base sources retrieved:")
         for i, sc in enumerate(scored, start=1):
             url = sc.chunk.url or "(no url)"
-            lines.append(f"  {i}. {sc.chunk.title} — {url} (score {sc.score:.3f})")
+            lines.append(f"  {i}. {sc.chunk.title}, {url} (score {sc.score:.3f})")
     else:
         lines.append("No relevant knowledge-base sources were retrieved.")
     # M11 egress boundary: the UNVERIFIED model draft goes to an (external)
-    # tracker only when explicitly enabled — see escalation_include_draft.
+    # tracker only when explicitly enabled, see escalation_include_draft.
     if raw_answer and include_draft:
         lines += ["", "Model draft (not surfaced to the user):", raw_answer]
     return "\n".join(lines)

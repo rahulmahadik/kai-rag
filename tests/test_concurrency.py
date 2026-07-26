@@ -1,5 +1,5 @@
 """Multi-user concurrency: many users hitting the bot at once (e.g. in one group)
-must each get THEIR OWN answer — the shared ChatService must be stateless/re-entrant,
+must each get THEIR OWN answer: the shared ChatService must be stateless/re-entrant,
 with no cross-talk. (Per-thread reply targeting is the adapter's job and uses
 per-message local state; this pins the shared 'brain'.)"""
 
@@ -43,7 +43,7 @@ def test_concurrent_users_each_get_their_own_answer(monkeypatch):
     for t in threads:
         t.join()
 
-    # Every concurrent caller got exactly its own answer — no cross-contamination.
+    # Every concurrent caller got exactly its own answer: no cross-contamination.
     assert results == {i: f"user-{i}-question" for i in range(25)}
 
 

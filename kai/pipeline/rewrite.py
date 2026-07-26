@@ -1,6 +1,6 @@
 """Optional query normalisation: fix spelling/grammar WITHOUT changing meaning.
 
-Messy real-user input (typos, missing punctuation) hurts retrieval — both the
+Messy real-user input (typos, missing punctuation) hurts retrieval, both the
 embedder and the BM25 lexical match degrade on misspellings. When
 ``query_rewrite`` is enabled, the LLM rewrites the question into clean text
 *before* retrieval, preserving the meaning, names and technical terms.
@@ -36,7 +36,7 @@ def rewrite_query(llm: LLMClient, question: str) -> str:
 
     try:
         out = llm.complete(_SYSTEM, original, max_tokens=80, temperature=0.0)
-    except Exception:  # noqa: BLE001 — never let a rewrite failure block retrieval
+    except Exception:  # noqa: BLE001 - never let a rewrite failure block retrieval
         return original
 
     out = (out or "").strip()
@@ -45,7 +45,7 @@ def rewrite_query(llm: LLMClient, question: str) -> str:
     # Keep only the first line; strip quotes/markdown the model may wrap around it.
     out = out.splitlines()[0].strip().strip('"').strip("`").strip()
     # Sanity: a real correction is roughly the same length. A wildly longer output
-    # means the model elaborated/answered — discard it and keep the original.
+    # means the model elaborated/answered, discard it and keep the original.
     if not out or len(out) > max(140, len(original) * 2):
         return original
     return out

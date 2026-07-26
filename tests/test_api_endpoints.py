@@ -1,5 +1,5 @@
 """API-level tests: auth (Q1), generic 500 (Q2), blank-422, feedback/escalate (M4),
-/metrics (M3) — with stubbed providers (no network/DB/models)."""
+/metrics (M3), with stubbed providers (no network/DB/models)."""
 
 from __future__ import annotations
 
@@ -21,13 +21,13 @@ def _fake_providers(*_a, **_k):
 
 
 def _answer(**over):
-    base = dict(
-        answer="Replication copies data [1].",
-        citations=[Citation(title="Replication", url="http://kb/r")],
-        confidence=0.9,
-        escalated=False,
-        escalation_url=None,
-    )
+    base = {
+        "answer": "Replication copies data [1].",
+        "citations": [Citation(title="Replication", url="http://kb/r")],
+        "confidence": 0.9,
+        "escalated": False,
+        "escalation_url": None,
+    }
     base.update(over)
     return Answer(**base)
 
@@ -38,7 +38,7 @@ def client(monkeypatch):
     monkeypatch.setattr(app_module, "ask_pipeline", lambda q, p, s: _answer())
     settings = Settings(
         _env_file=None,  # hermetic: don't absorb the local .env
-        KAI_API_KEY="sekret",  # field uses a validation_alias — kwarg must match it
+        KAI_API_KEY="sekret",  # field uses a validation_alias, kwarg must match it
         reranker="noop",
         database_url="",
         answer_cache_size=0,
@@ -165,7 +165,7 @@ def _notify_client(monkeypatch, send_result):
 
 
 def test_notify_failed_send_returns_502(monkeypatch):
-    # A failed DM must NOT return 200 — the caller has to know it didn't land.
+    # A failed DM must NOT return 200. The caller has to know it didn't land.
     c = _notify_client(monkeypatch, send_result=False)
     r = c.post("/notify", json={"email": "a@b.c", "message": "x"}, headers=AUTH)
     assert r.status_code == 502
@@ -184,7 +184,7 @@ def test_admin_inform_rejects_unknown_status(client):
 
 def test_feedback_down_survives_quarantine_db_error(client, monkeypatch):
     # The quarantine path touches the DB; if it fails, /feedback must still 200
-    # (the 👎 was already recorded) — never break /feedback.
+    # (the 👎 was already recorded): never break /feedback.
     from kai.pipeline.inform import InformStore
 
     def _boom(self, q):

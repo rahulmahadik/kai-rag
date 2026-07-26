@@ -1,9 +1,10 @@
 """The vector store must validate vector_type (switch between vector/halfvec)."""
 
 import pytest
+
 from kai.providers.vectorstore_pgvector import PgVectorStore
 
-DB = "postgresql://u@localhost/x"  # not connected to — validation is in __init__
+DB = "postgresql://u@localhost/x"  # not connected to, validation is in __init__
 
 
 def test_valid_vector_types_construct():

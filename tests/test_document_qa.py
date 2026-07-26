@@ -1,6 +1,6 @@
 """Ad-hoc document Q&A: extract_text + answer_from_document + /ask-document.
 
-A dropped file is held to the SAME never-fabricate bar as the corpus — relevant
+A dropped file is held to the SAME never-fabricate bar as the corpus, relevant
 questions answer from the doc, irrelevant ones say "not in the document".
 """
 
@@ -50,14 +50,14 @@ class FakeLLM:
 
 
 def _settings(**o):
-    base = dict(
-        verify_answers=False,
-        multi_query=False,
-        reranker="noop",
-        confidence_threshold=0.45,
-        answer_grounding_min=0.0,
-        database_url="",
-    )
+    base = {
+        "verify_answers": False,
+        "multi_query": False,
+        "reranker": "noop",
+        "confidence_threshold": 0.45,
+        "answer_grounding_min": 0.0,
+        "database_url": "",
+    }
     base.update(o)  # let a test override any default (e.g. confidence_threshold)
     return Settings(_env_file=None, **base)
 
@@ -99,7 +99,7 @@ def test_document_irrelevant_question_says_not_found():
 
 def test_confidence_threshold_actually_gates():
     # Same relevant question + sources: an unreachably-high CONFIDENCE_THRESHOLD must
-    # escalate, a zero threshold must answer — proving the config knob takes effect.
+    # escalate, a zero threshold must answer, proving the config knob takes effect.
     args = (
         "How does replication work?",
         DOC,
@@ -194,7 +194,7 @@ def test_ask_document_requires_auth(client):
 
 
 def test_ask_document_unsupported_type_is_clear(client):
-    # A .docx (we have no parser) must say so by name — not a vague "couldn't read".
+    # A .docx (we have no parser) must say so by name: not a vague "couldn't read".
     r = client.post(
         "/ask-document",
         headers=AUTH,

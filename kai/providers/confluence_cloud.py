@@ -5,7 +5,7 @@ protocol by paging through the content of a single Confluence space via the
 Confluence Cloud REST API and yielding one :class:`~kai.interfaces.Doc` per page.
 
 The raw ``body.storage`` HTML (Confluence storage format) is carried through on
-``Doc.html`` untouched — cleaning/chunking happens later in
+``Doc.html`` untouched, cleaning/chunking happens later in
 ``kai.pipeline.chunk`` so this module stays a thin, faithful adapter over the
 remote API.
 
@@ -15,7 +15,7 @@ runtime.
 
 from __future__ import annotations
 
-from typing import Iterable, Iterator
+from collections.abc import Iterable, Iterator
 from urllib.parse import urljoin, urlsplit
 
 import httpx
@@ -32,12 +32,12 @@ _EXPAND = "body.storage,space,metadata.labels,version"
 
 
 class _BearerAuth(httpx.Auth):
-    """Bearer-token auth — a Confluence Server/Data Center Personal Access Token."""
+    """Bearer-token auth: a Confluence Server/Data Center Personal Access Token."""
 
     def __init__(self, token: str) -> None:
         self._token = token
 
-    def auth_flow(self, request):  # noqa: ANN001, ANN201 — httpx auth hook
+    def auth_flow(self, request):  # noqa: ANN001, ANN201, httpx auth hook
         request.headers["Authorization"] = f"Bearer {self._token}"
         yield request
 
@@ -75,7 +75,7 @@ class ConfluenceCloudKBSource:
         self._base_url = base_url.rstrip("/")
         # Namespace doc ids by host so the SAME numeric page id on two different
         # Confluence instances cannot collide (and silently overwrite) in the
-        # shared vector store. Use hostname[:port] only — never userinfo — so a
+        # shared vector store. Use hostname[:port] only: never userinfo, so a
         # base URL with inline credentials can't leak into stored doc ids.
         _u = urlsplit(self._base_url)
         self._host = ((_u.hostname or "") + (f":{_u.port}" if _u.port else "")) or self._base_url
@@ -137,7 +137,7 @@ class ConfluenceCloudKBSource:
     # Internals
     # ------------------------------------------------------------------
     def _iter_subtree(self, client: httpx.Client, root: str) -> Iterator[Doc]:
-        """Yield a root page + all of its descendant pages (children, grandchildren …)."""
+        """Yield a root page + all of its descendant pages (children, grandchildren ...)."""
 
         root_id = self._resolve_page_id(client, root)
         # The root page itself.

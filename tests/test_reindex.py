@@ -1,7 +1,7 @@
 """reindex: a DATA-SAFE vector-index rebuild that PRESERVES curated/inform/telemetry.
 
 The correctness points this pins down:
-  * hashes are cleared so every doc re-embeds, but the live rows are NOT dropped —
+  * hashes are cleared so every doc re-embeds, but the live rows are NOT dropped,
     a failed/empty crawl can never wipe the corpus (per-doc embed-before-delete +
     prune guards), unlike the old drop-then-reingest;
   * approved curated answers are re-indexed from the Inform queue;
@@ -42,7 +42,7 @@ class FakeStore:
 
     def clear_doc_hashes(self):
         self.events.append("clear_hashes")
-        self.hashes.clear()  # only the hash side-table — live rows stay
+        self.hashes.clear()  # only the hash side-table, live rows stay
 
     def ensure_schema(self, dimensions):
         self.events.append(f"ensure:{dimensions}")
@@ -124,7 +124,7 @@ def test_reindex_reembeds_all_despite_stale_hashes():
 
 def test_reindex_empty_crawl_preserves_corpus():
     # THE data-loss guard: if the crawl returns nothing (expired token, upstream 5xx),
-    # reindex must NOT wipe the existing rows — the prune mass-delete guard refuses.
+    # reindex must NOT wipe the existing rows: the prune mass-delete guard refuses.
     store = FakeStore(chunks={"d1": 3, "d2": 2})
     result = reindex(_providers(store, []))  # empty KB
     assert set(store.chunks) == {"d1", "d2"}  # corpus intact
@@ -132,7 +132,7 @@ def test_reindex_empty_crawl_preserves_corpus():
 
 
 def test_reindex_prune_false_keeps_unseen_docs():
-    # A capped/subtree crawl reindexes with prune=False — it must NOT delete docs it
+    # A capped/subtree crawl reindexes with prune=False. It must NOT delete docs it
     # never saw (they exist beyond the cap), unlike a full crawl.
     store = FakeStore(chunks={"d1": 1, "d2": 1, "d_unseen": 1})
     reindex(_providers(store, _docs()), prune=False)  # _docs() yields only d1, d2

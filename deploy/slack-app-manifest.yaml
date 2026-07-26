@@ -1,4 +1,4 @@
-# KAI Slack app manifest — paste-to-create.
+# KAI Slack app manifest, paste-to-create.
 #
 # api.slack.com/apps → Create New App → From an app manifest → pick your workspace
 # → paste this YAML → Create. It pre-configures Socket Mode, the bot scopes, and the
@@ -21,9 +21,7 @@ oauth_config:
     bot:
       - app_mentions:read   # receive @mentions
       - chat:write          # post answers
-      - commands            # interactive Block Kit buttons (feedback)
       - im:history          # read DM contents (ask in a 1:1)
-      - im:read             # DM channel info
 settings:
   event_subscriptions:
     bot_events:
@@ -31,5 +29,5 @@ settings:
       - message.im          # any message in a DM
   interactivity:
     is_enabled: true        # the 👍/👎/Escalate Block Kit buttons
-  socket_mode_enabled: true # outbound websocket — no public URL needed
+  socket_mode_enabled: true # outbound websocket: no public URL needed
   org_deploy_enabled: false
