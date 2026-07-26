@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Removed
+- **Dependabot config.** Dependency floors are raised deliberately, as part of a
+  change that carries its own testing, rather than arriving as automated pull
+  requests.
+
 ## 1.1.0
 
 Maintenance release: dependency and toolchain refresh, a rebuilt CI pipeline, a real
