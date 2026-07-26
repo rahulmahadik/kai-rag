@@ -51,7 +51,7 @@ def test_composite_source_chains(tmp_path):
 
 
 def test_utf16_file_decoded(tmp_path):
-    # UTF-16 (with BOM) is common on Windows — must decode, not ingest NUL garbage.
+    # UTF-16 (with BOM) is common on Windows, must decode, not ingest NUL garbage.
     (tmp_path / "u16.txt").write_bytes("Café costs 5 EUR".encode("utf-16"))
     docs = {d.title: d for d in _src(tmp_path).iter_pages()}
     assert "u16" in docs and "Café costs" in docs["u16"].html

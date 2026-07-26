@@ -30,6 +30,6 @@ def test_unparseable_fails_open_to_pass():
 
 
 def test_chatty_pass_not_misread_as_fail():
-    # "failures" contains the substring "fail" — token matching must not trip on it.
+    # "failures" contains the substring "fail", token matching must not trip on it.
     assert _verdict_passes("PASS, no failures found") is True
-    assert _verdict_passes("PASS — the answer is fully grounded") is True
+    assert _verdict_passes("PASS. The answer is fully grounded") is True

@@ -14,10 +14,10 @@ the API, and the service stay untouched. Select one with ``CHAT_PLATFORM``.
 from __future__ import annotations
 
 
-def build_chat_adapter(settings):  # noqa: ANN001 — Settings, avoid import cycle
+def build_chat_adapter(settings):  # noqa: ANN001 - Settings, avoid import cycle
     """Return the chat adapter selected by ``CHAT_PLATFORM`` (default ``webex``).
 
-    Adapters are imported lazily so their SDKs (webex_bot / slack_bolt / …) are
+    Adapters are imported lazily so their SDKs (webex_bot / slack_bolt / ...) are
     only required for the platform actually in use.
     """
 

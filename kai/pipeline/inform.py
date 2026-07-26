@@ -1,8 +1,8 @@
-"""Inform loop  — turn gaps into curated knowledge, approval-gated.
+"""Inform loop, turn gaps into curated knowledge, approval-gated.
 
 The flow that makes KAI *learn*:
 
-  1. A question escalates (no confident answer) or gets a 👎 — surfaced by
+  1. A question escalates (no confident answer) or gets a 👎, surfaced by
      ``/admin/gaps`` (telemetry).
   2. A human SUBMITS an answer for that question → it lands in ``kai_kb_candidates``
      as **pending**. Nothing is indexed yet.
@@ -12,7 +12,7 @@ The flow that makes KAI *learn*:
      retrieves it and clears the gate.
   4. **reject** drops it, un-indexed.
 
-The load-bearing rule is structural: indexing happens ONLY in ``approve`` — the
+The load-bearing rule is structural: indexing happens ONLY in ``approve``, the
 submit path never writes to the vector store. So KAI can never auto-publish an
 unreviewed answer.
 
@@ -24,6 +24,7 @@ candidate queue.
 from __future__ import annotations
 
 import logging
+from typing import ClassVar
 
 from kai.interfaces import Doc, Embedder, VectorStore
 from kai.pipeline.chunk import chunk_document
@@ -55,14 +56,14 @@ def index_curated_answer(
     """
 
     if not (answer or "").strip():
-        return 0  # a curated entry must carry a real answer — never index a bare question
+        return 0  # a curated entry must carry a real answer: never index a bare question
     doc = Doc(
         id=f"kai-curated:{candidate_id}",
         title=question.strip(),
         url=url,
         html=f"{question.strip()}\n\n{answer.strip()}",
         space=CURATED_SPACE,
-        content_type="text",  # human answer — never HTML-mangled
+        content_type="text",  # human answer: never HTML-mangled
     )
     store.ensure_schema(embedder.dimensions)
     chunks = chunk_document(doc, target_tokens=target_tokens, overlap_tokens=overlap_tokens)
@@ -110,21 +111,24 @@ class InformStore:
             )
             # Backfill columns if the table predates these safeguards.
             cur.execute(
-                "ALTER TABLE kai_kb_candidates ADD COLUMN IF NOT EXISTS asker text NOT NULL DEFAULT ''"
+                "ALTER TABLE kai_kb_candidates ADD COLUMN IF NOT EXISTS "
+                "asker text NOT NULL DEFAULT ''"
             )
             cur.execute(
-                "ALTER TABLE kai_kb_candidates ADD COLUMN IF NOT EXISTS approver text NOT NULL DEFAULT ''"
+                "ALTER TABLE kai_kb_candidates ADD COLUMN IF NOT EXISTS "
+                "approver text NOT NULL DEFAULT ''"
             )
             cur.execute(
-                "ALTER TABLE kai_kb_candidates ADD COLUMN IF NOT EXISTS downvotes integer NOT NULL DEFAULT 0"
+                "ALTER TABLE kai_kb_candidates ADD COLUMN IF NOT EXISTS "
+                "downvotes integer NOT NULL DEFAULT 0"
             )
         conn.commit()
         self._ready = True
 
     def submit(self, question: str, answer: str, author: str = "", asker: str = "") -> int:
-        """Queue a candidate (pending). Does NOT index — approval does that.
+        """Queue a candidate (pending). Does NOT index, approval does that.
 
-        ``asker`` is the original asker's address (optional) — DMed on approval."""
+        ``asker`` is the original asker's address (optional), DMed on approval."""
 
         with self._connect() as conn:
             self._ensure(conn)
@@ -139,7 +143,7 @@ class InformStore:
         logger.info("kai_inform_submitted candidate=%s author=%r", new_id, author[:60])
         return new_id
 
-    _COLS = [
+    _COLS: ClassVar[list[str]] = [
         "id",
         "created_at",
         "question",
@@ -154,12 +158,13 @@ class InformStore:
 
     def _row_to_dict(self, row) -> dict:  # noqa: ANN001
         return {
-            c: (v.isoformat() if c == "created_at" and v else v) for c, v in zip(self._COLS, row)
+            c: (v.isoformat() if c == "created_at" and v else v)
+            for c, v in zip(self._COLS, row, strict=True)
         }
 
     def list(self, status: str = "pending", limit: int = 100, offset: int = 0) -> list[dict]:
         # ``offset`` lets a caller page through ALL candidates (the per-page cap stays
-        # at 500) — used by reindex so curated answers beyond the first page aren't lost.
+        # at 500), used by reindex so curated answers beyond the first page aren't lost.
         with self._connect() as conn:
             self._ensure(conn)
             with conn.cursor() as cur:
@@ -172,7 +177,7 @@ class InformStore:
                 return [self._row_to_dict(r) for r in cur.fetchall()]
 
     def get(self, candidate_id: int) -> dict | None:
-        # Direct lookup by id — NOT a scan of list(limit=500), so a candidate older
+        # Direct lookup by id: NOT a scan of list(limit=500), so a candidate older
         # than the 500 most-recent can still be approved/rejected/revoked.
         with self._connect() as conn:
             self._ensure(conn)
@@ -211,7 +216,7 @@ class InformStore:
 
     def downvote_curated(self, question: str) -> list[dict]:
         """+1 the downvotes of EVERY approved curated answer matching ``question`` and
-        return ``[{id, downvotes}, …]``. The self-correction signal: enough 👎 and the
+        return ``[{id, downvotes}, ...]``. The self-correction signal: enough 👎 and the
         caller quarantines it. Match is normalized (case/whitespace-insensitive). All
         matches are returned so two approved answers to the same question both count."""
 
@@ -228,7 +233,7 @@ class InformStore:
                     )
                     rows = cur.fetchall()
                 conn.commit()
-        except Exception as exc:  # noqa: BLE001 — must never break /feedback
+        except Exception as exc:  # noqa: BLE001 - must never break /feedback
             logger.warning("kai_inform_downvote_failed err=%s", type(exc).__name__)
             return []
         return [{"id": r[0], "downvotes": r[1]} for r in rows]

@@ -4,12 +4,12 @@
 Runs a grounded golden set (``eval/golden.json``) through the live KAI ``/ask``
 API, then CROSS-CHECKS each answer against the actual source text in the vector
 store (so a "correct-looking" answer that isn't really in the cited page is
-caught). Writes a human-readable markdown report of *asked vs returned* —
-``doc/eval-report.md`` — for cross-checking against Confluence.
+caught). Writes a human-readable markdown report of *asked vs returned*
+``doc/eval-report.md``, for cross-checking against Confluence.
 
 Design priorities (in order):
   1. ZERO wrong answers. The only truly wrong outcome is ANSWERING a question the
-     knowledge base cannot support (out-of-scope / non-existent) — that is a
+     knowledge base cannot support (out-of-scope / non-existent). That is a
      "humiliation". This is reported as WRONG and must be 0.
   2. Grounding. An in-scope answer must be supported by its cited source (the
      expected fact appears in the cited page's text). Ungrounded → REVIEW.
@@ -59,10 +59,9 @@ def _source_texts_for_titles(database_url: str, titles: list[str]) -> str:
     import psycopg
 
     out: list[str] = []
-    with psycopg.connect(database_url) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT text FROM kai_chunks WHERE title = ANY(%s)", (titles,))
-            out = [row[0] for row in cur.fetchall()]
+    with psycopg.connect(database_url) as conn, conn.cursor() as cur:
+        cur.execute("SELECT text FROM kai_chunks WHERE title = ANY(%s)", (titles,))
+        out = [row[0] for row in cur.fetchall()]
     return "\n".join(out).lower()
 
 
@@ -75,7 +74,7 @@ def _verdict(case: dict, resp: dict, grounded: bool | None) -> tuple[str, str]:
     if case.get("expect_escalate"):
         if escalated:
             return "OK-ESCALATED", "correctly abstained (not in KB)"
-        return "WRONG", "ANSWERED a question the KB cannot support — fabrication risk"
+        return "WRONG", "ANSWERED a question the KB cannot support, fabrication risk"
 
     # in_scope
     if escalated:
@@ -83,7 +82,7 @@ def _verdict(case: dict, resp: dict, grounded: bool | None) -> tuple[str, str]:
     expects = [e.lower() for e in case.get("expect_any", [])]
     hit = any(e in answer_low for e in expects) if expects else True
     if not hit:
-        return "REVIEW", "answer did not contain any expected fact — inspect"
+        return "REVIEW", "answer did not contain any expected fact, inspect"
     if grounded is False:
         return "GROUNDING?", "expected fact NOT found in the cited source text"
     return "PASS", "answered with the expected fact, grounded in the cited source"
@@ -125,7 +124,7 @@ def main() -> None:
         "ERROR": 0,
     }
 
-    print(f"KAI eval — {len(cases)} cases against {api_url} (threshold={threshold})\n")
+    print(f"KAI eval, {len(cases)} cases against {api_url} (threshold={threshold})\n")
     for i, case in enumerate(cases, 1):
         q = case["question"]
         print(f"[{i}/{len(cases)}] {case['id']}: {q}")
@@ -148,7 +147,7 @@ def main() -> None:
                 src = _source_texts_for_titles(s.database_url, cited_titles)
                 expects = [e.lower() for e in case.get("expect_any", [])]
                 grounded = any(e in src for e in expects) if expects else None
-            except Exception:  # noqa: BLE001 — grounding check is best-effort
+            except Exception:  # noqa: BLE001 - grounding check is best-effort
                 grounded = None
 
         verdict, note = _verdict(case, resp, grounded)
@@ -176,7 +175,7 @@ def _write_report(
     answered = counts["PASS"] + counts["REVIEW"] + counts["GROUNDING?"]
     in_scope_total = sum(1 for r in rows if r["case"]["category"] == "in_scope")
     lines: list[str] = []
-    lines.append("# KAI evaluation report — asked vs returned\n")
+    lines.append("# KAI evaluation report, asked vs returned\n")
     lines.append(
         "Cross-check each answer below against the source Confluence page (links in "
         "the Citations column). The **WRONG** count is the critical metric: it is the "
@@ -202,10 +201,10 @@ def _write_report(
                 f"[{(ci.get('title') or 'source')}]({ci.get('url') or ''})"
                 for ci in (resp.get("citations") or [])
             )
-            or "—"
+            or ", "
         )
-        conf = f"{resp.get('confidence'):.3f}" if resp.get("confidence") is not None else "—"
-        grounded = {True: "yes", False: "NO", None: "—"}[r["grounded"]]
+        conf = f"{resp.get('confidence'):.3f}" if resp.get("confidence") is not None else ", "
+        grounded = {True: "yes", False: "NO", None: ", "}[r["grounded"]]
         lines.append(
             f"| {i} | **{r['verdict']}** | {c['category']} | {c['question']} | "
             f"{resp.get('escalated')} | {conf} | {grounded} | {cits} |"

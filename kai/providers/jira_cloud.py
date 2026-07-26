@@ -4,7 +4,7 @@
 protocol by creating an issue in a Jira Cloud project via the REST v3 API and
 returning the issue's browsable URL.
 
-The issue ``description`` is sent as Atlassian Document Format (ADF) — the
+The issue ``description`` is sent as Atlassian Document Format (ADF), the
 structured JSON body Jira Cloud's v3 ``/issue`` endpoint requires (a plain
 string is rejected). We render the supplied plain-text body into ADF
 paragraphs, splitting on blank lines so multi-paragraph context survives.
@@ -105,7 +105,7 @@ class JiraCloudTracker:
         """Jira summaries are capped at 255 chars and reject embedded newlines.
 
         Collapse ALL whitespace (incl. newlines from a pasted multi-line question)
-        to single spaces, then truncate — so issue creation never 400s on format.
+        to single spaces, then truncate, so issue creation never 400s on format.
         """
 
         summary = " ".join((title or "").split()) or "KAI escalation"

@@ -2,7 +2,7 @@
 
 :class:`FileKBSource` implements the :class:`~kai.interfaces.KBSource` protocol by
 walking a directory and yielding one :class:`~kai.interfaces.Doc` per supported
-file. It is the second source type beside Confluence — the rest of the pipeline
+file. It is the second source type beside Confluence: the rest of the pipeline
 (chunk → embed → store → retrieve → answer, and every grounding guard) is
 source-agnostic, so files flow through unchanged.
 
@@ -21,8 +21,8 @@ Confluence **and** files together.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable, Iterator
 from pathlib import Path
-from typing import Iterable, Iterator
 
 from kai.interfaces import Doc, KBSource
 
@@ -138,7 +138,7 @@ def extract_text(filename: str, data: bytes) -> str:
         try:
             reader = PdfReader(io.BytesIO(data))
             return "\n\n".join((pg.extract_text() or "") for pg in reader.pages)
-        except Exception:  # noqa: BLE001 — a corrupt PDF yields no text, not a crash
+        except Exception:  # noqa: BLE001 - a corrupt PDF yields no text, not a crash
             return ""
     return _decode_text(data) or ""
 
@@ -168,7 +168,7 @@ def unreadable_reason(filename: str) -> str:
     """A clear, format-aware message for a file we couldn't get any text from.
 
     Distinguishes "unsupported format" (e.g. .docx) from "a PDF with no text layer"
-    (scanned/image → needs OCR) from a generic empty/garbage file — so the user knows
+    (scanned/image → needs OCR) from a generic empty/garbage file, so the user knows
     whether to convert it, run OCR, or that it's simply empty.
     """
 
@@ -177,7 +177,7 @@ def unreadable_reason(filename: str) -> str:
         return f"I can't read **{ext or 'that'}** files. {SUPPORTED_UPLOAD_HINT}"
     if ext in _PDF_EXTS:
         return (
-            f"I couldn't read any text from **{filename}** — it looks like a scanned "
+            f"I couldn't read any text from **{filename}**. It looks like a scanned "
             "or image-only PDF, which would need OCR first."
         )
     return f"I couldn't find any readable text in **{filename}**. {SUPPORTED_UPLOAD_HINT}"
@@ -188,7 +188,7 @@ def _decode_text(raw: bytes) -> str | None:
 
     Tries UTF-16 (when a BOM is present), then UTF-8 (BOM-aware), then CP1252 as a
     last resort. Rejects results that are mostly replacement chars / NULs / control
-    bytes — so a binary file with a ``.txt`` extension, or a UTF-16 export read as
+    bytes, so a binary file with a ``.txt`` extension, or a UTF-16 export read as
     UTF-8, is skipped instead of silently polluting the vector index with garbage.
     """
 
@@ -217,7 +217,7 @@ def _decode_text(raw: bytes) -> str | None:
 class FileKBSource:
     """Yield local files (PDF / Markdown / text / HTML) as :class:`Doc` objects."""
 
-    def __init__(self, settings) -> None:  # noqa: ANN001 — Settings, avoid import cycle
+    def __init__(self, settings) -> None:  # noqa: ANN001 - Settings, avoid import cycle
         source_dir = str(getattr(settings, "source_dir", "") or "").strip()
         if not source_dir:
             raise ValueError(
@@ -247,10 +247,10 @@ class FileKBSource:
                 continue
             if self._skip(path):  # hidden / VCS / build-cache dirs and dotfiles
                 continue
-            # The file EXISTS upstream — record it as seen before any skip below, so a
+            # The file EXISTS upstream, record it as seen before any skip below, so a
             # too-large / empty file is never pruned as if it had been deleted.
             self.seen_ids.add(path.relative_to(self._root).as_posix())
-            # Size cap (bytes, not pages) — skip a too-large file before reading it
+            # Size cap (bytes, not pages), skip a too-large file before reading it
             # into memory, with a clear log so the operator can raise the limit.
             if self._max_bytes > 0:
                 try:
@@ -259,7 +259,8 @@ class FileKBSource:
                     continue
                 if size > self._max_bytes:
                     logger.warning(
-                        "kai_file_too_large path=%s size=%dB limit=%dB (raise FILE_MAX_BYTES to ingest)",
+                        "kai_file_too_large path=%s size=%dB limit=%dB "
+                        "(raise FILE_MAX_BYTES to ingest)",
                         path.name,
                         size,
                         self._max_bytes,
@@ -267,7 +268,7 @@ class FileKBSource:
                     continue
             try:
                 doc = self._to_doc(path)
-            except Exception as exc:  # noqa: BLE001 — one bad file must not fail the run
+            except Exception as exc:  # noqa: BLE001 - one bad file must not fail the run
                 logger.warning("kai_file_skipped path=%s err=%s", path.name, type(exc).__name__)
                 continue
             if doc is not None:
@@ -278,7 +279,7 @@ class FileKBSource:
     # ------------------------------------------------------------------
     def _skip(self, path: Path) -> bool:
         """Skip dotfiles and hidden/junk directories (``.git``, ``node_modules``,
-        build caches) so a crawl never ingests VCS metadata or dependencies — the
+        build caches) so a crawl never ingests VCS metadata or dependencies, the
         extension allowlist alone would otherwise let a ``node_modules/*.md`` through.
         """
 
@@ -293,13 +294,13 @@ class FileKBSource:
             body, ctype = self._read_pdf(path), "text"
             if not body or not body.strip():
                 # A PDF with no extractable text is almost always scanned/image-only
-                # — say so explicitly rather than skip silently (it would need OCR).
+                # - say so explicitly rather than skip silently (it would need OCR).
                 logger.warning("kai_pdf_no_text path=%s (scanned/image PDF? needs OCR)", path.name)
                 return None
         else:
             body = _decode_text(path.read_bytes())
             if body is None:
-                # Undecodable / binary content with a text extension — skip rather
+                # Undecodable / binary content with a text extension, skip rather
                 # than embed U+FFFD/NUL garbage that would pollute the index.
                 logger.warning(
                     "kai_file_undecodable path=%s (binary or unknown encoding)", path.name
@@ -310,7 +311,7 @@ class FileKBSource:
             elif ext in _MARKDOWN_EXTS:
                 ctype = "markdown"  # heading-aware chunking
             else:
-                ctype = "text"  # plain text — no heading semantics
+                ctype = "text"  # plain text: no heading semantics
 
         if not body or not body.strip():
             return None  # empty -> skip rather than ingest blank
@@ -319,7 +320,7 @@ class FileKBSource:
         return Doc(
             id=rel,  # stable, unique -> idempotent chunk ids
             title=path.stem,
-            url=path.resolve().as_uri(),  # file:///… so citations are clickable
+            url=path.resolve().as_uri(),  # file:///... so citations are clickable
             html=body,
             space="files",
             content_type=ctype,
@@ -334,7 +335,7 @@ class FileKBSource:
             from pypdf import PdfReader
         except ModuleNotFoundError as exc:  # pragma: no cover - dep guard
             raise RuntimeError(
-                "Reading PDFs needs the 'pypdf' package — run `.venv/bin/pip install pypdf`."
+                "Reading PDFs needs the 'pypdf' package, run `.venv/bin/pip install pypdf`."
             ) from exc
 
         reader = PdfReader(str(path))
@@ -342,7 +343,7 @@ class FileKBSource:
         for i, page in enumerate(reader.pages):
             try:
                 pages.append(page.extract_text() or "")
-            except Exception as exc:  # noqa: BLE001 — one bad page must not lose the file
+            except Exception as exc:  # noqa: BLE001 - one bad page must not lose the file
                 logger.warning(
                     "kai_pdf_page_skipped path=%s page=%d err=%s", path.name, i, type(exc).__name__
                 )
@@ -358,7 +359,7 @@ class CompositeKBSource:
 
     @property
     def seen_ids(self) -> set[str]:
-        """Union of every child's seen ids (yielded OR skipped) — for prune safety."""
+        """Union of every child's seen ids (yielded OR skipped), for prune safety."""
 
         out: set[str] = set()
         for source in self._sources:
@@ -378,10 +379,10 @@ class CompositeKBSource:
                 for doc in source.iter_pages():
                     count += 1
                     yield doc
-            except Exception as exc:  # noqa: BLE001 — one bad source must not kill the rest
+            except Exception as exc:  # noqa: BLE001 - one bad source must not kill the rest
                 self.errors += 1
                 logger.error(
-                    "kai_source_failed source=%s yielded=%d err=%s: %s — skipping the "
+                    "kai_source_failed source=%s yielded=%d err=%s: %s, skipping the "
                     "rest of this source; remaining sources continue.",
                     label,
                     count,

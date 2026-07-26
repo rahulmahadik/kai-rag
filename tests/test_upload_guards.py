@@ -73,11 +73,11 @@ def test_unreadable_reason_is_format_aware():
 
 
 # ----------------------------------------------------------------------- #
-# extract_text — magic-byte PDF detection beats a lying filename
+# extract_text, magic-byte PDF detection beats a lying filename
 # ----------------------------------------------------------------------- #
 def test_extract_text_magic_byte_routes_to_pdf():
     # %PDF- header but a .bin name → the PDF branch (which yields "" on a corrupt
-    # PDF), NOT the text decoder (which would return the literal "%PDF-1.4 …" text).
+    # PDF), NOT the text decoder (which would return the literal "%PDF-1.4 ..." text).
     assert extract_text("mystery.bin", b"%PDF-1.4\nnot really a pdf") == ""
 
 
@@ -86,7 +86,7 @@ def test_extract_text_plain_still_decodes():
 
 
 # ----------------------------------------------------------------------- #
-# chunk_body — upload gets the SAME treatment as ingest
+# chunk_body, upload gets the SAME treatment as ingest
 # ----------------------------------------------------------------------- #
 def test_chunk_body_html_strips_tags():
     joined = " ".join(
@@ -108,7 +108,7 @@ def test_chunk_body_text_keeps_hash_literally():
 
 
 # ----------------------------------------------------------------------- #
-# Directory crawl — skip hidden / VCS / dependency dirs
+# Directory crawl, skip hidden / VCS / dependency dirs
 # ----------------------------------------------------------------------- #
 def test_crawl_skips_hidden_and_junk_dirs(tmp_path):
     (tmp_path / "good.md").write_text("# Hi\n\nreal content here")
@@ -124,7 +124,7 @@ def test_crawl_skips_hidden_and_junk_dirs(tmp_path):
 
 
 # ----------------------------------------------------------------------- #
-# Webex download — size cap (stream-enforced, no full buffer first)
+# Webex download, size cap (stream-enforced, no full buffer first)
 # ----------------------------------------------------------------------- #
 class _FakeStream:
     def __init__(self, status, headers, chunks):

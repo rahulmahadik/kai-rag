@@ -1,4 +1,4 @@
-"""Multiple knowledge sources — several Confluence instances (numbered env vars)
+"""Multiple knowledge sources, several Confluence instances (numbered env vars)
 and/or several directories (SOURCE_DIRS), combined via CompositeKBSource. Fully
 backward-compatible with the single-instance flat config. Construction is
 config-only (no network/disk reads beyond dir existence), so these are hermetic."""
@@ -95,7 +95,7 @@ def test_build_kb_confluence_unconfigured_raises():
 
 # ---- non-contiguous numbering + orphaned keys ---------------------------------
 def test_confluence_instances_non_contiguous(monkeypatch):
-    # 2 and 12 (gaps are fine) — both discovered, neither dropped.
+    # 2 and 12 (gaps are fine), both discovered, neither dropped.
     monkeypatch.setenv("CONFLUENCE_2_BASE_URL", "https://b/wiki")
     monkeypatch.setenv("CONFLUENCE_2_SPACE_KEY", "B")
     monkeypatch.setenv("CONFLUENCE_12_BASE_URL", "https://l/wiki")

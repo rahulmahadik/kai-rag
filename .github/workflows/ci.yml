@@ -1,33 +1,160 @@
-# KAI CI — runs the unit/integration suite on every push/PR.
-# These tests use fakes + validation-only constructors, so they need NEITHER
-# Ollama, a live Postgres, nor torch (the reranker import is lazy) — CI stays fast.
-# The LIVE accuracy gate (eval/run_eval.py, the 61-Q golden set) needs Ollama + a
-# seeded pgvector DB, so it runs locally/nightly, not here — see doc/ for how.
+# KAI CI.
+#
+# Four jobs, cheapest first:
+#   lint        ruff check + ruff format --check (fails fast on style/lint).
+#   test        the unit suite on 3.12 and 3.13. Uses fakes and validation-only
+#               constructors, so it needs neither Ollama, Postgres, nor torch.
+#   integration the same suite PLUS tests/integration, against a real Postgres
+#               with pgvector. This is what proves the SQL (hybrid RRF search,
+#               schema, upsert/replace/prune) actually works, not just the fakes.
+#   docker      builds the production image and boots it, so a broken Dockerfile
+#               or a missing runtime dep fails here rather than in someone's deploy.
+#
+# The LIVE accuracy gate (eval/run_eval.py, the golden question set) needs a real
+# LLM + a seeded corpus, so it runs locally/nightly, not here. See doc/.
 name: ci
+
 on:
   push:
     branches: [main, develop]
   pull_request:
+  workflow_dispatch:
+
+# A new push to the same branch cancels the older, now-pointless run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: nothing here writes to the repo.
+permissions:
+  contents: read
+
+env:
+  PYTHONUNBUFFERED: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
 jobs:
-  test:
+  lint:
+    name: lint (ruff)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-      - name: Install core deps (no torch/Ollama needed for the suite)
+      - name: Install ruff
+        # Pinned: an unpinned floor lets a new ruff release fail every open PR with
+        # no code change. Bump this deliberately, together with the dev extra.
+        run: pip install "ruff==0.15.18"
+      - name: ruff check
+        run: ruff check --output-format=github .
+      - name: ruff format --check
+        run: ruff format --check .
+
+  test:
+    name: test (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install the package + dev extras
+        # Installing the project itself (not a hand-listed dep set) means CI fails
+        # when pyproject drifts from what the code actually imports.
         run: |
           python -m pip install -U pip
-          pip install fastapi "uvicorn" "pydantic>=2" pydantic-settings httpx "psycopg[binary]>=3" pgvector numpy pypdf pytest
-      - name: Run tests
+          pip install -e ".[dev,teams]"
+      - name: Run the unit suite
         run: python -m pytest -q tests/
 
-  docker:
+  integration:
+    name: integration (postgres + pgvector)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_USER: kai
+          POSTGRES_PASSWORD: kai
+          POSTGRES_DB: kai_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U kai -d kai_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # Presence of this variable is what un-skips tests/integration.
+      KAI_TEST_DATABASE_URL: postgresql://kai:kai@localhost:5432/kai_test
+      # This job installs Chromium below, so the web-UI suite must RUN here.
+      # Without it those tests skip; with it a missing browser fails the job.
+      # Only set for this job: the unit jobs have no Playwright and must skip.
+      KAI_REQUIRE_UI_TESTS: "1"
     steps:
-      - uses: actions/checkout@v4
-      # Builds the production image so the Docker/Compose path has real coverage
-      # (build only — no live DB/models needed to prove it packages + installs).
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install the package + dev extras
+        run: |
+          python -m pip install -U pip
+          pip install -e ".[dev,teams,uitest]"
+      - name: Install Chromium for the web-UI suite
+        # Without a browser tests/integration/test_web_ui.py skips silently, which
+        # would leave the page's rendering and escaping untested.
+        run: python -m playwright install --with-deps chromium
+      - name: Run the unit + integration suites with coverage
+        # Coverage is gated here, not in the unit job: the unit job has no database,
+        # so its number would be structurally lower and the floor meaningless.
+        run: python -m pytest -q tests/ --cov --cov-report=term --cov-report=xml
+      - name: Upload the coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: warn
+
+  docker:
+    name: docker build + boot
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
       - name: Build the KAI image
         run: docker build -t kai:ci .
+      - name: Boot the image and check /health
+        # Proves the image actually runs: the app must start unconfigured (no .env)
+        # and still serve /health, which is the contract the HEALTHCHECK relies on.
+        run: |
+          docker run -d --name kai-ci -p 8100:8100 kai:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8100/health >/dev/null 2>&1; then
+              echo "health ok after ${i}s"; curl -sS http://127.0.0.1:8100/health; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::the container never answered /health"; docker logs kai-ci; exit 1
+      - name: Container logs
+        if: always()
+        run: docker logs kai-ci || true
+      - name: Assert the image runs as the unprivileged build user
+        if: always()
+        # Assert the EXACT uid, not "not 0": a failed docker run yields an empty
+        # string, and `test "" != "0"` would pass without ever checking anything.
+        run: |
+          uid="$(docker run --rm kai:ci id -u)"
+          echo "container uid=${uid}"
+          test "${uid}" = "10001"

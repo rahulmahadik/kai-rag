@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hmac
 import logging
+import re
 import threading
 import time
 from dataclasses import asdict
@@ -34,6 +35,10 @@ from kai.pipeline.ask import ask as ask_pipeline
 from kai.pipeline.ingest import ingest as ingest_pipeline
 
 logger = logging.getLogger("kai")
+
+# Deliberately permissive: enough to reject whitespace, control characters and
+# obvious junk before the address is handed to an external API.
+_EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
 
 
 def _prewarm_reranker(settings: Settings) -> None:
@@ -54,8 +59,6 @@ def _prewarm_reranker(settings: Settings) -> None:
             logger.info("kai_reranker_prewarmed model=%s", settings.reranker_model)
         except Exception as exc:  # don't crash startup; a query will surface it
             logger.warning("kai_reranker_prewarm_failed err=%s", type(exc).__name__)
-
-    import threading
 
     threading.Thread(target=_load, name="reranker-prewarm", daemon=True).start()
 
@@ -83,7 +86,7 @@ class IngestResponse(BaseModel):
 
 
 class FeedbackRequest(BaseModel):
-    """Body for ``POST /feedback`` — 👍/👎 from the chat surface."""
+    """Body for ``POST /feedback``, 👍/👎 from the chat surface."""
 
     question: str = Field(..., min_length=1, max_length=2000)
     verdict: str = Field(..., pattern="^(up|down)$")
@@ -91,7 +94,7 @@ class FeedbackRequest(BaseModel):
 
 
 class EscalateRequest(BaseModel):
-    """Body for ``POST /escalate`` — the user's explicit "escalate anyway".
+    """Body for ``POST /escalate``: the user's explicit "escalate anyway".
 
     Does NOT re-run /ask: it files a ticket for the stated question directly
     (the human override for an over-confident answer).
@@ -102,7 +105,7 @@ class EscalateRequest(BaseModel):
 
 
 class AskDocumentRequest(BaseModel):
-    """Body for ``POST /ask-document`` — ad-hoc Q&A over an uploaded file.
+    """Body for ``POST /ask-document``: ad-hoc Q&A over an uploaded file.
 
     The file bytes are base64-encoded (JSON, no multipart dependency); KAI extracts
     the text, runs in-memory RAG scoped to JUST this document, and answers with the
@@ -117,24 +120,24 @@ class AskDocumentRequest(BaseModel):
 
 
 class InformRequest(BaseModel):
-    """Body for ``POST /admin/inform`` — a human's curated answer to a gap.
+    """Body for ``POST /admin/inform``: a human's curated answer to a gap.
 
     Queued as PENDING; nothing is indexed until ``/approve``."""
 
     question: str = Field(..., min_length=3, max_length=2000)
     answer: str = Field(..., min_length=1, max_length=20000)
     author: str = Field(default="", max_length=200)
-    asker: str = Field(default="", max_length=320, description="original asker — DMed on approval")
+    asker: str = Field(default="", max_length=320, description="original asker, DMed on approval")
 
 
 class ApproveRequest(BaseModel):
-    """Body for approve — who approves (for the dual-control / audit trail)."""
+    """Body for approve: who approves (for the dual-control / audit trail)."""
 
     approver: str = Field(default="", max_length=200)
 
 
 class NotifyRequest(BaseModel):
-    """Body for ``POST /notify`` — proactively DM a Webex user (e.g. when an
+    """Body for ``POST /notify``, proactively DM a Webex user (e.g. when an
     escalation is resolved, or from the future Inform loop)."""
 
     email: str = Field(..., min_length=3, max_length=320)
@@ -154,7 +157,7 @@ def _configure_logging(settings: Settings) -> None:
     file-skip warnings and escalation notices are silently dropped. We attach one
     dedicated stderr handler (captured into the server log file) to the ``kai``
     parent logger at the configured level, with ``propagate=False`` so nothing is
-    double-logged. Idempotent — safe across repeated ``create_app`` calls.
+    double-logged. Idempotent, safe across repeated ``create_app`` calls.
     """
 
     level = getattr(logging, str(getattr(settings, "log_level", "INFO")).upper(), logging.INFO)
@@ -190,7 +193,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     inform = InformStore(settings.database_url)
 
     # Answer cache: exact-match on the normalized question, BUSTED on every
-    # /ingest (the load-bearing part — a cache that survives a KB update serves
+    # /ingest (the load-bearing part: a cache that survives a KB update serves
     # stale answers). Confident answers only; escalations always re-run so a
     # repeat question still files/refreshes its ticket. In-process, bounded.
     from collections import OrderedDict
@@ -211,20 +214,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # keep them on for local dev (no key set).
     _keyed = bool(settings.api_key)
     _description = (
-        "**KAI — Know · Ask · Inform.**\n\n"
+        "**KAI, Know · Ask · Inform.**\n\n"
         "A self-hosted, grounded RAG assistant: it answers questions from *your* "
         "documents (Confluence + files) **with citations**, and **escalates instead of "
-        "guessing** — KAI never fabricates.\n\n"
-        "- `POST /ask` — grounded answer + citations, or an escalation to a human.\n"
-        "- `POST /ask-document` — ad-hoc Q&A over an uploaded file (read once, never stored).\n"
-        "- `POST /search` — retrieve-only (no LLM): top chunks + scores.\n"
-        "- `POST /feedback` · `POST /escalate` — 👍/👎 and raise-for-a-human.\n"
-        "- `/admin/*` — ingest, the Inform curation loop, and reindex (maintainers).\n"
+        "guessing**. KAI never fabricates.\n\n"
+        "- `POST /ask`, grounded answer + citations, or an escalation to a human.\n"
+        "- `POST /ask-document`: ad-hoc Q&A over an uploaded file (read once, never stored).\n"
+        "- `POST /search`, retrieve-only (no LLM): top chunks + scores.\n"
+        "- `POST /feedback` · `POST /escalate`, 👍/👎 and raise-for-a-human.\n"
+        "- `/admin/*`, ingest, the Inform curation loop, and reindex (maintainers).\n"
     )
     _tags_meta = [
         {
             "name": "Ask & search",
-            "description": "Ask questions and retrieve — grounded and cited, or escalated.",
+            "description": "Ask questions and retrieve, grounded and cited, or escalated.",
         },
         {
             "name": "Knowledge base",
@@ -241,7 +244,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         {"name": "Ops", "description": "Liveness and metrics."},
     ]
     app = FastAPI(
-        title="KAI — Know · Ask · Inform",
+        title="KAI, Know · Ask · Inform",
         description=_description,
         version="1.0.0",
         openapi_tags=_tags_meta,
@@ -254,9 +257,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         redoc_url=None if _keyed else "/redoc",
         openapi_url=None if _keyed else "/openapi.json",
     )
-    # CORS — the web frontend is a SEPARATE app/origin (see frontend/). Allow ONLY
+    # CORS: the web frontend is a SEPARATE app/origin (see frontend/). Allow ONLY
     # the origins in CORS_ORIGINS (comma-separated). Secure by default: when unset,
-    # NO cross-origin browser access is granted — and we never silently wildcard.
+    # NO cross-origin browser access is granted, and we never silently wildcard.
     _cors = [o.strip() for o in (settings.cors_origins or "").split(",") if o.strip()]
     if "*" in _cors:
         logger.warning(
@@ -270,10 +273,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allow_methods=["*"],
             allow_headers=["*"],
         )
-    # Loud warning when the corpus is unauthenticated — easy to miss until exposed.
+    # Loud warning when the corpus is unauthenticated, easy to miss until exposed.
     if not settings.api_key:
         logger.warning(
-            "KAI_API_KEY is not set — the API is UNAUTHENTICATED and the whole "
+            "KAI_API_KEY is not set. The API is UNAUTHENTICATED and the whole "
             "corpus is readable by anyone who can reach it. Set KAI_API_KEY before "
             "exposing KAI beyond localhost."
         )
@@ -282,23 +285,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.providers = providers
 
+    _expected_bearer = f"Bearer {settings.api_key}".encode()
+
     def _require_api_key(authorization: str | None = Header(default=None)) -> None:
-        """when ``api_key`` is configured, require a matching bearer token.
+        """When ``api_key`` is configured, require a matching bearer token.
         No-op when unset (local dev). ``/health`` is intentionally left open."""
         if not settings.api_key:
             return
-        # Constant-time compare so the bearer check can't be timing-probed.
-        if not hmac.compare_digest(authorization or "", f"Bearer {settings.api_key}"):
+        # Compare bytes: compare_digest raises TypeError on a non-ASCII str, which
+        # would turn a junk header into a 500 instead of a 401.
+        supplied = (authorization or "").encode("utf-8", "replace")
+        if not hmac.compare_digest(supplied, _expected_bearer):
             raise HTTPException(status_code=401, detail="Invalid or missing API key.")
 
     @app.exception_handler(Exception)
-    async def _on_unhandled(request, exc):  # noqa: ANN001,ARG001 — FastAPI handler
+    async def _on_unhandled(request, exc):  # noqa: ANN001,ARG001, FastAPI handler
         # log the real error server-side; return a generic message so we never
         # leak base URLs / space keys / project keys to the caller.
         logger.error("kai_unhandled path=%s err=%s", request.url.path, repr(exc))
         return JSONResponse(
             status_code=500,
-            content={"detail": "Internal error — please retry or contact an administrator."},
+            content={"detail": "Internal error, please retry or contact an administrator."},
         )
 
     @app.get("/health", response_model=HealthResponse, tags=["Ops"], summary="Liveness check")
@@ -306,13 +313,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return HealthResponse(status="ok")
 
     @app.get("/", include_in_schema=False)
-    def home() -> dict:  # API banner — the web chat UI is a separate app (frontend/)
+    def home() -> dict:  # API banner: the web chat UI is a separate app (frontend/)
         banner = {
             "name": "KAI",
             "status": "ok",
             "docs": None if _keyed else "/docs",  # docs are hidden in keyed/prod mode
             "health": "/health",
-            "ui": "served separately — see the frontend/ directory",
+            "ui": "served separately, see the frontend/ directory",
         }
         # Self-describing in open/dev mode; in keyed/prod mode don't enumerate the API
         # surface to unauthenticated callers (the banner itself stays open for liveness).
@@ -331,7 +338,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         "/ingest",
         response_model=IngestResponse,
         tags=["Knowledge base"],
-        summary="(Re)build the index — incremental (unchanged docs skipped)",
+        summary="(Re)build the index, incremental (unchanged docs skipped)",
         dependencies=[Depends(_require_api_key)],
     )
     def ingest() -> IngestResponse:
@@ -346,7 +353,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             passage_prefix=settings.embed_passage_prefix,
             prune=full_crawl,
         )
-        _bust_cache()  # the KB changed — cached answers may now be stale
+        _bust_cache()  # the KB changed, cached answers may now be stale
         return IngestResponse(ingested=count)
 
     @app.post(
@@ -370,7 +377,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         start = time.monotonic()
         answer = ask_pipeline(req.question, providers, settings)
         duration_ms = int((time.monotonic() - start) * 1000)
-        # one structured event per ask — this is what makes the confidence
+        # one structured event per ask. This is what makes the confidence
         # gate measurable in production (escalation rate, calibration, latency).
         telemetry.record_ask(
             req.question,
@@ -424,7 +431,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
 
         # Reject a known-binary type (office/image/archive) up front with a clear
-        # "unsupported format" message — before buffering/decoding ~30 MB of base64.
+        # "unsupported format" message, before buffering/decoding ~30 MB of base64.
         if is_unsupported_upload(req.filename):
             return _unreadable()
         try:
@@ -466,14 +473,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     def feedback(req: FeedbackRequest) -> dict:
         """persist 👍/👎. A 👎 on a CURATED answer is the self-correction
-        signal — enough of them auto-un-index it for re-review, so a wrong curated
+        signal, enough of them auto-un-index it for re-review, so a wrong curated
         answer can't keep being served."""
 
         telemetry.record_feedback(req.question, req.verdict, req.reporter)
         out = {"status": "recorded"}
         if req.verdict == "down":
             # The quarantine side-effects touch the DB; a failure here must NEVER 500
-            # the feedback call (the 👎 was already recorded) — degrade to a log.
+            # the feedback call (the 👎 was already recorded), degrade to a log.
             try:
                 hits = inform.downvote_curated(req.question)
                 threshold = getattr(settings, "inform_downvote_quarantine", 0) or 0
@@ -488,7 +495,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         quarantined.append(hit["id"])
                 if quarantined:
                     out["quarantined"] = quarantined
-            except Exception as exc:  # noqa: BLE001 — never break /feedback
+            except Exception as exc:  # noqa: BLE001 - never break /feedback
                 logger.error("kai_feedback_quarantine_failed err=%s", type(exc).__name__)
         return out
 
@@ -499,7 +506,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         dependencies=[Depends(_require_api_key)],
     )
     def escalate(req: EscalateRequest) -> dict:
-        """explicit "escalate anyway" — file a ticket WITHOUT re-running /ask."""
+        """explicit "escalate anyway", file a ticket WITHOUT re-running /ask."""
 
         _embedder, _llm, _store, _kb, tracker = providers
         telemetry.record_feedback(req.question, "escalate", req.reporter)
@@ -511,7 +518,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         try:
             url = (tracker.create_issue(title=title, body=body) or "").strip()
-        except Exception as exc:  # noqa: BLE001 — degrade, never 500 the button
+        except Exception as exc:  # noqa: BLE001 - degrade, never 500 the button
             logger.error("kai_escalation_failed err=%s", type(exc).__name__)
             url = ""
         return {"status": "escalated", "escalation_url": url or None}
@@ -533,16 +540,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         token = (settings.webex_bot_token or "").strip()
         if not token:
             raise HTTPException(status_code=400, detail="WEBEX_BOT_TOKEN is not configured.")
-        if "@" not in (req.email or ""):
+        if not _EMAIL_RE.fullmatch((req.email or "").strip()):
             raise HTTPException(status_code=422, detail="email must be a valid address.")
         from kai.chat.webex import send_direct_message
 
         sent = send_direct_message(token, req.email, req.message)
         if not sent:
-            # Don't return 200 on a failed send — the caller can't tell it didn't land.
+            # Don't return 200 on a failed send. The caller can't tell it didn't land.
             raise HTTPException(
                 status_code=502,
-                detail="Could not deliver the notification (recipient may not have messaged the bot).",
+                detail=(
+                    "Could not deliver the notification "
+                    "(the recipient may not have messaged the bot)."
+                ),
             )
         return {"status": "sent"}
 
@@ -552,7 +562,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         summary="Prometheus metrics (asks, escalation rate, cache hits, latency)",
         dependencies=[Depends(_require_api_key)],
     )
-    def metrics():  # noqa: ANN202 — plain text response
+    def metrics():  # noqa: ANN202 - plain text response
         """Prometheus text exposition (in-process counters; reset on restart)."""
 
         from fastapi.responses import PlainTextResponse
@@ -566,7 +576,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         dependencies=[Depends(_require_api_key)],
     )
     def gaps(limit: int = 50) -> dict:
-        """most-escalated questions — which pages to write next."""
+        """most-escalated questions: which pages to write next."""
 
         return {"gaps": telemetry.gaps(limit=max(1, min(limit, 500)))}
 
@@ -578,7 +588,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         dependencies=[Depends(_require_api_key)],
     )
     def inform_submit(req: InformRequest) -> dict:
-        """Queue a curated answer for a gap question (PENDING — not indexed yet)."""
+        """Queue a curated answer for a gap question (PENDING: not indexed yet)."""
 
         cid = inform.submit(req.question, req.answer, req.author, req.asker)
         return {"id": cid, "status": "pending"}
@@ -588,7 +598,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get(
         "/admin/inform",
         tags=["Learning loop (Inform)"],
-        summary="List curated-answer candidates by status (pending/approved/…)",
+        summary="List curated-answer candidates by status (pending/approved/...)",
         dependencies=[Depends(_require_api_key)],
     )
     def inform_list(status: str = "pending", limit: int = 100, offset: int = 0) -> dict:
@@ -611,7 +621,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         }
 
     def _unindex_curated(candidate_id: int) -> None:
-        embedder, _llm, store, _kb, _tracker = providers
+        _embedder, _llm, store, _kb, _tracker = providers
         try:
             store.delete(f"kai-curated:{candidate_id}")
         except Exception as exc:  # noqa: BLE001
@@ -675,7 +685,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             notified = send_direct_message(
                 token,
                 asker,
-                f"Good news — your question **{cand['question']}** now has an answer in KAI. "
+                f"Good news, your question **{cand['question']}** now has an answer in KAI. "
                 "Ask me again and I'll share it.",
             )
         return {"id": candidate_id, "status": "approved", "chunks": chunks, "notified": notified}
@@ -687,15 +697,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         dependencies=[Depends(_require_api_key)],
     )
     def inform_reject(candidate_id: int) -> dict:
-        """Reject a PENDING candidate — dropped, never indexed."""
+        """Reject a PENDING candidate, dropped, never indexed."""
 
         cand = inform.get(candidate_id)
         if cand is None:
             raise HTTPException(status_code=404, detail="candidate not found")
         if cand["status"] == "approved":
-            # An approved answer is INDEXED — rejecting wouldn't un-index it; use revoke.
+            # An approved answer is INDEXED, rejecting wouldn't un-index it; use revoke.
             raise HTTPException(
-                status_code=409, detail="candidate is approved/indexed — use /revoke to un-index."
+                status_code=409, detail="candidate is approved/indexed, use /revoke to un-index."
             )
         if cand["status"] in ("rejected", "revoked"):
             return {"id": candidate_id, "status": cand["status"]}  # idempotent
@@ -705,11 +715,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post(
         "/admin/inform/{candidate_id}/revoke",
         tags=["Learning loop (Inform)"],
-        summary="Revoke an approved (indexed) answer — remove it from the corpus",
+        summary="Revoke an approved (indexed) answer, remove it from the corpus",
         dependencies=[Depends(_require_api_key)],
     )
     def inform_revoke(candidate_id: int) -> dict:
-        """Pull an already-approved curated answer — UN-INDEX it in one call.
+        """Pull an already-approved curated answer, UN-INDEX it in one call.
 
         The escape hatch for a WRONG answer that slipped through approval: it stops
         being retrievable immediately.
@@ -735,19 +745,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         dependencies=[Depends(_require_api_key)],
     )
     def reindex_endpoint() -> dict:
-        """Rebuild the vector index in place — the clean alternative to reset-db.
+        """Rebuild the vector index in place: the clean alternative to reset-db.
 
         Re-embeds every source (clears the content hashes so nothing is skipped) and
         re-indexes approved curated answers, while keeping the Inform queue, feedback
         and telemetry. Per-doc replace (embed before delete) + the prune guards mean a
         failed/empty crawl can't wipe the corpus; an embedding-DIMENSION change is
-        refused (it can't be applied in place — use reset-db). Prunes only on a full
+        refused (it can't be applied in place, use reset-db). Prunes only on a full
         crawl. reset-db (drop the whole DB) stays available for a total wipe.
         """
 
         from kai.pipeline.ingest import reindex as reindex_pipeline
 
-        # Prune only on a FULL whole-corpus crawl — a capped/subtree crawl can't see
+        # Prune only on a FULL whole-corpus crawl: a capped/subtree crawl can't see
         # every page, so pruning it would delete valid docs (same guard as /ingest).
         full_crawl = not settings.confluence_root_page and not settings.confluence_max_docs
         result = reindex_pipeline(
@@ -758,7 +768,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             prune=full_crawl,
             inform_store=inform,
         )
-        _bust_cache()  # the whole index changed — drop stale cached answers
+        _bust_cache()  # the whole index changed, drop stale cached answers
         return result
 
     @app.post(
@@ -799,11 +809,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     return app
 
 
-# Module-level ASGI app for ``uvicorn kai.app:app``. Built eagerly so uvicorn (and
-# tooling) import a ready app. Guarded so that merely *importing* kai.app — for the
-# test suite, CI, or `python -c "import kai.app"` — never requires a configured
-# ``.env``. If config is missing/invalid we still expose a minimal app that returns
-# a clear 503 on every route instead of crashing at import time.
+# Module-level ASGI app for ``uvicorn kai.app:app``, built eagerly. Guarded so that
+# importing kai.app (tests, CI) never requires a configured ``.env``: without one we
+# expose a minimal app that 503s rather than crashing at import time.
 try:
     app = create_app()
 except Exception as _config_error:  # pragma: no cover - only without a valid .env

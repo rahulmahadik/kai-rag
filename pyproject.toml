@@ -1,41 +1,53 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=80", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "kai-rag"
 version = "1.0.0"
-description = "KAI — a self-hosted, grounded knowledge assistant for your team's docs that answers with citations and never guesses."
+description = "KAI: a self-hosted, grounded knowledge assistant for your team's docs that answers with citations and never guesses."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "Rahul Mahadik" }]
 keywords = ["rag", "knowledge-base", "confluence", "pgvector", "chatbot", "self-hosted"]
-# Minimum floors are recent, tested baselines (the suite is green against the current
-# latest of each). They're `>=` ranges, not pins, so you still get the newest patches.
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+# Minimum floors track the versions the suite is actually green against, so a fresh
+# install gets a tested baseline. They are `>=` ranges, not pins, so you still pick
+# up newer patches; CI runs against the resolved latest of each.
 dependencies = [
-    "fastapi>=0.115",
-    "uvicorn>=0.30",
-    "pydantic>=2.7",
-    "pydantic-settings>=2.4",
-    "httpx>=0.27",
-    "psycopg[binary]>=3.2",
-    "pgvector>=0.3",
-    "numpy>=2.0",
-    "pypdf>=5.1",
+    "fastapi>=0.138",
+    "uvicorn>=0.49",
+    "pydantic>=2.13",
+    "pydantic-settings>=2.14",
+    "httpx>=0.28",
+    "psycopg[binary]>=3.3",
+    "pgvector>=0.4",
+    "numpy>=2.4",
+    "pypdf>=6.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.2", "ruff>=0.6"]
-# chat surface (Webex websocket bot) — kept optional so the core API stays light
-bot = ["webex_bot>=1.2"]
-# Slack chat surface (CHAT_PLATFORM=slack)
-slack = ["slack_bolt>=1.18"]
-# Microsoft Teams chat surface (CHAT_PLATFORM=teams) — inbound Bot Framework webhook;
+dev = ["pytest>=9.0", "pytest-cov>=7.0", "ruff>=0.15"]
+# Browser-driven tests for the web UI (tests/integration/test_web_ui.py). Needs
+# `playwright install chromium` after pip install; the suite skips without it.
+uitest = ["playwright>=1.48"]
+# Chat surface (Webex websocket bot). Optional so the core API stays light.
+bot = ["webex_bot>=1.3"]
+# Slack chat surface (CHAT_PLATFORM=slack).
+slack = ["slack_bolt>=1.28"]
+# Microsoft Teams chat surface (CHAT_PLATFORM=teams): inbound Bot Framework webhook.
 # pyjwt validates the inbound bot token (FastAPI/uvicorn/httpx are already core deps).
-teams = ["pyjwt[crypto]>=2.8"]
-# cross-encoder reranker (RERANKER=cross_encoder)
-rerank = ["sentence-transformers>=3.0"]
+teams = ["pyjwt[crypto]>=2.10"]
+# Cross-encoder reranker (RERANKER=cross_encoder).
+rerank = ["sentence-transformers>=5.0"]
 
 [project.urls]
 Homepage = "https://rahulmahadik.com"
@@ -49,8 +61,57 @@ include = ["kai*"]
 # internal/ scratch or eval/ harnesses.
 testpaths = ["tests"]
 norecursedirs = ["internal", "eval", ".venv", "build", "dist", "release"]
+# Warnings are signal, not noise: a deprecation in a dependency should be visible.
+filterwarnings = ["default"]
+markers = [
+    "integration: needs a live Postgres with pgvector (KAI_TEST_DATABASE_URL).",
+    "live_llm: needs a live OpenAI-compatible LLM + embeddings endpoint (KAI_TEST_LLM_BASE_URL).",
+    "ui: drives the web UI in a real browser (needs playwright + chromium).",
+]
+
+[tool.coverage.run]
+source = ["kai"]
+branch = true
+
+[tool.coverage.report]
+# The floor is the integration-suite number, so a CI run without a database does
+# not trip it. Measured at 94% with the integration suite running.
+fail_under = 92
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "\\.\\.\\.$",
+    "if __name__ == .__main__.:",
+]
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
 extend-exclude = ["internal", ".venv"]
+
+[tool.ruff.lint]
+# Beyond the defaults (E/F): import order, bugbear correctness traps, modern-Python
+# rewrites, comprehension and pathlib cleanups, and the Ruff-specific checks.
+select = ["E", "F", "W", "I", "B", "UP", "C4", "SIM", "PIE", "RUF"]
+# Codes this project annotates with `noqa` but does not lint for (they document
+# *why* a broad except / unused arg is deliberate). Declaring them here keeps those
+# comments from being reported as stale noqa directives.
+external = ["ANN", "ARG", "BLE", "D"]
+ignore = [
+    # The codebase deliberately catches broad exceptions on best-effort paths
+    # (telemetry, feedback, one-bad-doc-per-crawl); each site carries a noqa + why.
+    "B904",   # raise-from inside except: handled case by case where it adds context.
+    "SIM105", # contextlib.suppress is not clearer than a commented try/except here.
+    "RUF001", # ambiguous unicode in strings: the UI copy uses real arrows/quotes.
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests reach into private helpers on purpose and use long literal fixtures.
+"tests/*" = ["E501"]
+# The eval harnesses print wide diagnostic tables; wrapping those f-strings makes
+# the console output harder to read than the source is to scan.
+"eval/*" = ["E501"]

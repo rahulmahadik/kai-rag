@@ -1,4 +1,4 @@
-# Keep the build context (and image) small — only kai/ + pyproject + README ship.
+# Keep the build context (and image) small, only kai/ + pyproject + README ship.
 .git
 .github
 .venv

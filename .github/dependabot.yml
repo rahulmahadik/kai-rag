@@ -1,0 +1,32 @@
+# Keep the stack current without hand-auditing every release.
+#
+# The dependency floors in pyproject are `>=` ranges, so a patch release needs no
+# PR here; what these updates catch is the base image, the pinned actions, and any
+# floor that has fallen far enough behind to be worth raising deliberately.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    # The project pins `>=` floors, which any newer release already satisfies, so the
+    # default strategy would find nothing to do. `increase` raises the floor itself,
+    # which is the thing actually worth reviewing here.
+    versioning-strategy: increase
+    groups:
+      python-dependencies:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly

@@ -22,10 +22,10 @@ logger = logging.getLogger("kai.chat")
 # What KAI can do, shown when a user types "help" on any platform. Kept here (not in
 # an adapter) so every surface answers "help" identically.
 HELP_TEXT = (
-    "**I'm KAI** — I answer questions from your team's knowledge base and cite my "
+    "**I'm KAI**. I answer questions from your team's knowledge base and cite my "
     "sources, and I escalate to a human instead of guessing.\n\n"
-    "• **Ask me anything** in plain language — e.g. _“How do I rotate the API keys?”_\n"
-    "• **Attach a file** (PDF, text, Markdown, or HTML) and ask about it — I read it "
+    '• **Ask me anything** in plain language, e.g. _"How do I rotate the API keys?"_\n'
+    "• **Attach a file** (PDF, text, Markdown, or HTML) and ask about it. I read it "
     "just for that question; it isn't saved to the knowledge base.\n"
     "• Use the **👍 / 👎** buttons on an answer, or ask me to **escalate** if I got it wrong.\n\n"
     "If something isn't in the knowledge base, I'll tell you rather than make it up."
@@ -54,7 +54,7 @@ def is_help_request(text: str) -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Pure formatting (no network) — re-exported from kai.bot for back-compat.
+# Pure formatting (no network), re-exported from kai.bot for back-compat.
 # --------------------------------------------------------------------------- #
 def format_reply(ask_json: dict) -> str:
     """Render a ``/ask`` JSON response as a portable-markdown reply.
@@ -150,7 +150,7 @@ class ChatService:
     def answer(self, msg: IncomingMessage) -> tuple[dict | None, str]:
         """POST the question to ``/ask``. Returns ``(json, "")`` or ``(None, friendly_error)``.
 
-        Never raises — distinguishes misconfiguration from outage so users aren't
+        Never raises, distinguishes misconfiguration from outage so users aren't
         told to retry something only an admin can fix.
         """
 
@@ -163,32 +163,32 @@ class ChatService:
             )
         except httpx.TimeoutException:
             logger.error("kai_ask_failed err=Timeout")
-            return None, "Sorry — that took longer than expected. Please try again in a moment."
+            return None, "Sorry. That took longer than expected. Please try again in a moment."
         except httpx.HTTPError as exc:
             logger.error("kai_ask_failed err=%s", type(exc).__name__)
             return None, (
-                "Sorry — I couldn't reach the knowledge service just now. "
+                "Sorry. I couldn't reach the knowledge service just now. "
                 "Please try again in a moment."
             )
         if resp.status_code in (401, 403):
             logger.error("kai_ask_failed status=%d (auth)", resp.status_code)
             return None, (
                 "I'm not configured correctly (API authentication failed) "
-                "— please tell an administrator."
+                ", please tell an administrator."
             )
         if resp.status_code == 422:
-            return None, "I couldn't process that question — try rephrasing it."
+            return None, "I couldn't process that question, try rephrasing it."
         if resp.status_code != 200:
             logger.error("kai_ask_failed status=%d", resp.status_code)
             return None, (
-                "Sorry — the knowledge service had a problem with that "
+                "Sorry: the knowledge service had a problem with that "
                 "question. Please try again in a moment."
             )
         try:
             return resp.json(), ""
         except ValueError:
             logger.error("kai_ask_failed err=BadJSON")
-            return None, "Sorry — I got a malformed reply from the knowledge service."
+            return None, "Sorry. I got a malformed reply from the knowledge service."
 
     def ask_document(self, filename: str, data: bytes, question: str) -> tuple[dict | None, str]:
         """POST an uploaded file's bytes to ``/ask-document`` for ad-hoc RAG."""
@@ -209,28 +209,31 @@ class ChatService:
             )
         except httpx.HTTPError as exc:
             logger.error("kai_ask_document_failed err=%s", type(exc).__name__)
-            return None, "Sorry — I couldn't process that file just now."
+            return None, "Sorry. I couldn't process that file just now."
         if resp.status_code == 413:
             return None, "That file is too large for me to read."
         if resp.status_code != 200:
             logger.error("kai_ask_document_failed status=%d", resp.status_code)
-            return None, "Sorry — I couldn't read that file."
+            return None, "Sorry. I couldn't read that file."
         try:
             return resp.json(), ""
         except ValueError:
-            return None, "Sorry — I got a malformed reply about that file."
+            return None, "Sorry. I got a malformed reply about that file."
 
     def handle_feedback(self, fb: FeedbackEvent) -> str:
         """Route a 👍/👎/escalate event to ``/feedback`` or ``/escalate``; return an ack.
 
-        Never claims success on a FAILED call — a swallowed error must not tell the
+        Never claims success on a FAILED call: a swallowed error must not tell the
         user a human was notified when no record was created (the never-fabricate rule
         applies to the feedback layer too)."""
 
         if fb.verdict == "escalate":
             data = self._post("/escalate", {"question": fb.question, "reporter": fb.sender_email})
             if data is None:
-                return "Sorry — I couldn't raise that for a human just now. Please try again in a moment."
+                return (
+                    "Sorry, I couldn't raise that for a human just now. "
+                    "Please try again in a moment."
+                )
             if data.get("escalation_url"):
                 return f"Raised for a human to follow up: {data['escalation_url']}"
             return "Raised for a human to follow up."
@@ -240,11 +243,11 @@ class ChatService:
                 {"question": fb.question, "verdict": fb.verdict, "reporter": fb.sender_email},
             )
             if data is None:
-                return "Sorry — I couldn't record that just now. Please try again in a moment."
+                return "Sorry. I couldn't record that just now. Please try again in a moment."
             return (
-                "Thanks — noted!"
+                "Thanks, noted!"
                 if fb.verdict == "up"
-                else "Thanks — noted. If you'd like a human to look at it, use *Escalate anyway*."
+                else "Thanks, noted. If you'd like a human to look at it, use *Escalate anyway*."
             )
         return ""
 
@@ -255,6 +258,6 @@ class ChatService:
             )
             resp.raise_for_status()
             return resp.json()
-        except Exception as exc:  # noqa: BLE001 — feedback must never crash the bot
+        except Exception as exc:  # noqa: BLE001 - feedback must never crash the bot
             logger.error("kai_chat_post_failed path=%s err=%s", path, type(exc).__name__)
             return None

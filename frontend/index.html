@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>KAI — knowledge assistant</title>
+<title>KAI, knowledge assistant</title>
 <style>
   :root { --bg:#0f1420; --panel:#161d2e; --me:#264b7a; --kai:#1f2a3f; --muted:#8a97ad;
           --accent:#5b8def; --warn:#caa34a; --text:#e8edf6; --line:#26304a; }
@@ -42,7 +42,7 @@
        background:#0c111b; color:var(--text); font-size:15px; }
   button { padding:0 18px; border:0; border-radius:10px; background:var(--accent); color:#fff;
            font-weight:600; cursor:pointer; } button:disabled { opacity:.5; cursor:default; }
-  .dots::after { content:'…'; animation:d 1.2s steps(4,end) infinite; }
+  .dots::after { content:'...'; animation:d 1.2s steps(4,end) infinite; }
   @keyframes d { 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} }
   .cfg { width:210px; padding:7px 9px; border-radius:8px; border:1px solid var(--line);
          background:#0c111b; color:var(--text); font-size:12px; }
@@ -51,13 +51,13 @@
 </head>
 <body>
   <header>
-    <b>KAI</b><span class="tag">Know · Ask · Inform — grounded, cited answers from your knowledge base; it won't guess</span>
+    <b>KAI</b><span class="tag">Know · Ask · Inform, grounded, cited answers from your knowledge base; it won't guess</span>
     <span style="flex:1"></span>
     <input id="api" class="cfg" placeholder="API base URL" autocomplete="off" />
     <input id="key" class="cfg key" placeholder="API key (if set)" autocomplete="off" />
   </header>
   <div id="log">
-    <div class="row"><div class="bubble">Hi! Ask me anything about the knowledge base — I'll answer with sources, or tell you if I don't know. You can also <b>attach a file</b> (📎) and ask about it — I'll read it just for that question (it isn't saved).
+    <div class="row"><div class="bubble">Hi! Ask me anything about the knowledge base. I'll answer with sources, or tell you if I don't know. You can also <b>attach a file</b> (📎) and ask about it. I'll read it just for that question (it isn't saved).
       <div class="examples">
         <span class="chip">What can you do?</span>
         <span class="chip">How do I reset my password?</span>
@@ -69,11 +69,11 @@
   <form id="f">
     <label id="clip" title="Attach a file (PDF, text, Markdown, HTML)">📎<input id="file" type="file"
       accept=".pdf,.txt,.text,.log,.md,.markdown,.rst,.html,.htm" hidden /></label>
-    <input id="q" placeholder="Ask a question…" autocomplete="off" autofocus />
+    <input id="q" placeholder="Ask a question..." autocomplete="off" autofocus />
     <button id="send" type="submit">Ask</button>
   </form>
 <script>
-// Standalone frontend — talks to the KAI API (a separate service) over HTTP/CORS.
+// Standalone frontend, talks to the KAI API (a separate service) over HTTP/CORS.
 // The API base defaults to the local API port; change it in the header to point
 // anywhere. No build step, no framework, no dependencies.
 const log = document.getElementById('log'), q = document.getElementById('q'),
@@ -88,10 +88,13 @@ apiInput.onchange = () => localStorage.setItem('kai_api', apiInput.value.trim())
 keyInput.onchange = () => localStorage.setItem('kai_key', keyInput.value.trim());
 const apiBase = () => (apiInput.value.trim().replace(/\/$/, '')); // '' = same origin
 
-const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// Citation URLs are only as trustworthy as the corpus. Allow navigating schemes
+// only, so javascript:/data: can never become a live href.
+const safeUrl = u => /^(https?:|file:|mailto:)/i.test(String(u || '').trim()) ? String(u).trim() : '';
 function md(s){ // minimal: escape, then links, bold, inline code, newlines
   s = esc(s);
-  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
   s = s.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/`([^`]+)`/g,'<code>$1</code>');
   return s.replace(/\n/g,'<br>');
 }
@@ -109,12 +112,13 @@ function renderAnswer(el, d, note){
   const cites = d.escalated ? (d.suggested_sources||[]) : (d.citations||[]);
   if(cites.length){
     html += '<div class="sources"><div class="h">'+(d.escalated?'Closest pages (not a confirmed answer)':'Sources')+'</div>'+
-            cites.filter(c=>c.url).map(c=>'• <a href="'+esc(c.url)+'" target="_blank" rel="noopener">'+esc(c.title||c.url)+'</a>').join('<br>')+'</div>';
+            cites.map(c=>({u:safeUrl(c.url), t:c.title||c.url})).filter(c=>c.u)
+                 .map(c=>'• <a href="'+esc(c.u)+'" target="_blank" rel="noopener noreferrer">'+esc(c.t)+'</a>').join('<br>')+'</div>';
   }
-  // On an escalation the score is RETRIEVAL confidence, not answer confidence — showing
+  // On an escalation the score is RETRIEVAL confidence, not answer confidence, showing
   // it as "confidence 0.73" next to "escalated" reads as a contradiction, so we don't.
   const pill = d.escalated ? '<span class="pill esc">escalated</span>' : '<span class="pill ok">answered</span>';
-  const meta = d.escalated ? pill + ' · not confident enough — flagged for review'
+  const meta = d.escalated ? pill + ' · not confident enough, flagged for review'
                            : pill + ' · confidence ' + (d.confidence??0).toFixed(2);
   html += '<div class="meta">'+meta+'</div>';
   if(note && !d.escalated) html += '<div class="meta note">'+esc(note)+'</div>';
@@ -129,7 +133,7 @@ async function ask(path, body, label, note){
   const thinking = bubble('kai'); thinking.innerHTML = '<span class="dots">searching the knowledge base</span>';
   try {
     const res = await fetch(apiBase()+path, {method:'POST', headers:headers(), body:JSON.stringify(body)});
-    if(!res.ok){ thinking.textContent = res.status===401 ? 'Authentication failed — check the API key.' :
+    if(!res.ok){ thinking.textContent = res.status===401 ? 'Authentication failed, check the API key.' :
                  res.status===413 ? 'That file is too large for me to read.' :
                  'Sorry, something went wrong ('+res.status+').'; return; }
     renderAnswer(thinking, await res.json(), note);
@@ -140,15 +144,15 @@ async function ask(path, body, label, note){
 // --- file attachment ---
 let selectedFile = null;
 function clearFile(){ selectedFile=null; fileInput.value=''; filebar.className=''; filebar.innerHTML='';
-  q.placeholder='Ask a question…'; }
+  q.placeholder='Ask a question...'; }
 fileInput.onchange = () => {
   selectedFile = fileInput.files[0] || null;
   if(!selectedFile){ clearFile(); return; }
   filebar.className='show';
   filebar.innerHTML = '<span class="filepill">📎 <b>'+esc(selectedFile.name)+'</b> <span class="x" title="Remove">✕</span></span>'+
-                      '<span class="tag" style="color:var(--muted);font-size:12px">read once for your next question — not saved to the knowledge base</span>';
+                      '<span class="tag" style="color:var(--muted);font-size:12px">read once for your next question: not saved to the knowledge base</span>';
   filebar.querySelector('.x').onclick = clearFile;
-  q.placeholder='Ask about this file…'; q.focus();
+  q.placeholder='Ask about this file...'; q.focus();
 };
 function b64(file){ return new Promise((resolve,reject)=>{ const r=new FileReader();
   r.onerror=()=>reject(r.error); r.onload=()=>resolve(String(r.result).split(',')[1]||''); r.readAsDataURL(file); }); }
@@ -168,7 +172,7 @@ f.onsubmit = async (e) => {
     let content_b64; try { content_b64 = await b64(file); }
     catch { bubble('kai').textContent = 'Could not read that file.'; return; }
     await ask('/ask-document', {question, filename:file.name, content_b64}, label,
-              "I read this file just for this question — it isn't saved to the knowledge base.");
+              "I read this file just for this question. It isn't saved to the knowledge base.");
     return;
   }
   if(!text) return;
