@@ -6,7 +6,7 @@
 # The default build is light (no torch). For the full-accuracy cross-encoder
 # reranker, build with the rerank extra and set RERANKER=cross_encoder:
 #   docker build --build-arg EXTRAS=bot,slack,rerank -t kai .
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 LABEL org.opencontainers.image.title="KAI" \
       org.opencontainers.image.description="Self-hosted grounded RAG knowledge assistant" \
