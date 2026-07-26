@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.0
 
 Maintenance release: dependency and toolchain refresh, a rebuilt CI pipeline, a real
 integration and live-model test suite, and a set of correctness and hardening fixes
