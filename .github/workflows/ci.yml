@@ -46,7 +46,7 @@ jobs:
       - name: Install ruff
         # Pinned: an unpinned floor lets a new ruff release fail every open PR with
         # no code change. Bump this deliberately, together with the dev extra.
-        run: pip install "ruff==0.15.18"
+        run: pip install "ruff==0.16.0"
       - name: ruff check
         run: ruff check --output-format=github .
       - name: ruff format --check
@@ -59,7 +59,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        # 3.14 is what the Docker image ships (see Dockerfile), so it has to be
+        # tested here or the published runtime is the one version nothing covers.
+        python-version: ["3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
