@@ -5,17 +5,19 @@ Drives real conversations through the live /ask backend and the EXACT render
 code each adapter uses (webex_reply / slack_messages / handle_feedback /
 ask_document), printing what Webex and Slack would send. The only thing this
 does NOT cover is the literal platform socket (receiving the event + the
-platform rendering the sent message) — that needs real tokens.
+platform rendering the sent message). That needs real tokens.
 
     python run/setup.py start        # backend must be up
     .venv/bin/python eval/simulate_bot.py
 """
 
-from kai.config import Settings
+from pathlib import Path
+
+from kai.chat.base import FeedbackEvent, IncomingMessage
 from kai.chat.service import ChatService, format_reply
-from kai.chat.base import IncomingMessage, FeedbackEvent
-from kai.chat.webex import webex_reply
 from kai.chat.slack import slack_messages
+from kai.chat.webex import webex_reply
+from kai.config import Settings
 
 s = Settings(kai_api_url="http://127.0.0.1:8100")  # REAL backend
 svc = ChatService(s)
@@ -49,8 +51,8 @@ for v in ("up", "down", "escalate"):
         f"    👆 {v:8s} -> {svc.handle_feedback(FeedbackEvent(verdict=v, question='What is Kafka?'))!r}"
     )
 
-print("\n--- INBOUND FILE (drop a file, ask about it) — the ad-hoc RAG path the bot calls ---")
-data = open("samples/01_kai_overview.pdf", "rb").read()
+print("\n--- INBOUND FILE (drop a file, ask about it): the ad-hoc RAG path the bot calls ---")
+data = Path("samples/01_kai_overview.pdf").read_bytes()
 doc, err = svc.ask_document("01_kai_overview.pdf", data, "What is KAI's core guarantee?")
 print(
     "    file Q ->",

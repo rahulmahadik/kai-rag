@@ -1,9 +1,9 @@
-# KAI — Setup & Run Guide
+# KAI, Setup & Run Guide
 
 **Author:** Rahul Mahadik
 
 KAI is an enterprise knowledge assistant. It answers questions from your
-knowledge base (Confluence) with **grounded, cited answers**, and — critically —
+knowledge base (Confluence) with **grounded, cited answers**, and, critically,
 it **escalates instead of guessing** when it isn't confident, so it never hands a
 user a confident wrong answer. It runs fully on your own machine (local LLM,
 embeddings, reranker, and vector database), so your content stays on your
@@ -19,7 +19,7 @@ automated test suite):
 
 Run the accuracy gate against your own corpus with `python eval/run_eval.py`.
 
-You can use KAI three ways: a **web chat UI** (the separate `frontend/` app — open
+You can use KAI three ways: a **web chat UI** (the separate `frontend/` app, open
 it in a browser), the **HTTP API** (`POST /ask`), or a **chat bot** in Webex/Slack
 (`@KAI <question>`). The chat-bot setup is in [integrations-setup.md](integrations-setup.md).
 
@@ -33,15 +33,15 @@ it in a browser), the **HTTP API** (`POST /ask`), or a **chat bot** in Webex/Sla
 | **PostgreSQL 14+ with the `pgvector` extension** | Local install is fine. `setup.py doctor` checks it. |
 | **[Ollama](https://ollama.com)** running locally | Serves the LLM + embeddings on `:11434`. |
 | Two Ollama models | `ollama pull qwen2.5:14b-instruct` and `ollama pull nomic-embed-text` |
-| _(optional)_ A Webex/Slack account | Only if you want the **chat bot** — not needed for the web UI or the HTTP API. |
+| _(optional)_ A Webex/Slack account | Only if you want the **chat bot**: not needed for the web UI or the HTTP API. |
 
 > The cross-encoder reranker model (~90 MB) downloads automatically the first time the
-> API starts (one-time) — no manual step. It loads in a background thread, so `/health`
+> API starts (one-time): no manual step. It loads in a background thread, so `/health`
 > stays responsive while it downloads.
 
 ---
 
-## Step 1 — Install
+## Step 1, Install
 
 From the repository root:
 
@@ -54,7 +54,7 @@ python run/setup.py doctor      # confirms Postgres / pgvector / Ollama / deps a
 
 ---
 
-## Step 2 — Configure
+## Step 2, Configure
 
 ```bash
 cp .env.example .env
@@ -62,22 +62,22 @@ cp .env.example .env
 
 **You don't need to change anything to start.** `.env` ships pointing at the
 public **Apache `COMDEV`** Confluence space with the tuned settings, so it works
-out of the box — the **only value you'll add is your Webex bot token** (Step 5).
+out of the box, the **only value you'll add is your Webex bot token** (Step 5).
 
 Everything else is optional, for reference:
 
 | Setting | Default | When you'd change it |
 |---|---|---|
 | `CONFLUENCE_*` | public `COMDEV` | Later, to point at your own Confluence (see the end of this guide). |
-| `LLM_MODEL` / `EMBED_MODEL` | `qwen2.5:14b-instruct` / `nomic-embed-text` | To swap models — no code change. |
+| `LLM_MODEL` / `EMBED_MODEL` | `qwen2.5:14b-instruct` / `nomic-embed-text` | To swap models: no code change. |
 | `CONFLUENCE_MAX_DOCS` | `40` | Cap pages while testing; `0` = whole space. |
-| `CONFIDENCE_THRESHOLD` / `RERANKER` | `0.45` / `cross_encoder` | Tuned — leave as-is. |
+| `CONFIDENCE_THRESHOLD` / `RERANKER` | `0.45` / `cross_encoder` | Tuned, leave as-is. |
 
 Secrets live only in `.env`, which is git-ignored and never committed.
 
 ---
 
-## Step 3 — Load the knowledge base
+## Step 3, Load the knowledge base
 
 ```bash
 python run/setup.py start       # starts the API on http://127.0.0.1:8100
@@ -89,7 +89,7 @@ it whenever the source content changes.
 
 ---
 
-## Step 4 — Verify the API (optional but recommended)
+## Step 4, Verify the API (optional but recommended)
 
 ```bash
 # A question the knowledge base CAN answer → grounded answer + a source link:
@@ -107,7 +107,7 @@ the `/admin/*` surface to anonymous scanners.)
 
 ---
 
-## Step 5 — Create the Webex bot & get its token
+## Step 5, Create the Webex bot & get its token
 
 1. Sign in at **<https://developer.webex.com>**.
 2. Open **My Webex Apps → Create a New App → Create a Bot**.
@@ -119,12 +119,12 @@ the `/admin/*` surface to anonymous scanners.)
    WEBEX_BOT_TOKEN=<paste-the-bot-access-token>
    ```
 
-Note the bot's email address (e.g. `kai@webex.bot`) — you'll use it to add the
+Note the bot's email address (e.g. `kai@webex.bot`). You'll use it to add the
 bot to a space.
 
 ---
 
-## Step 6 — Run the bot
+## Step 6, Run the bot
 
 With the API already running (Step 3):
 
@@ -133,12 +133,12 @@ python run/setup.py bot
 ```
 
 This opens an **outbound websocket** to Webex. There is **no public URL, no
-tunnel, and no firewall change** — your machine only needs normal outbound
+tunnel, and no firewall change**, your machine only needs normal outbound
 internet. Leave it running (Ctrl-C to stop).
 
 ---
 
-## Step 7 — Use it in Webex
+## Step 7, Use it in Webex
 
 1. In Webex, start a space (or use a direct message) and **add the bot** by its
    email (`kai@webex.bot`).
@@ -150,7 +150,7 @@ internet. Leave it running (Ctrl-C to stop).
 ### Office (non-personal) Webex
 
 The code and the bot token are **identical** for a personal and an organization
-account — the only difference is your organization's bot policy in Webex Control
+account: the only difference is your organization's bot policy in Webex Control
 Hub. If custom bots are restricted there, ask your Webex administrator to
 allow-list this bot by its email; otherwise it works immediately.
 
@@ -167,14 +167,14 @@ CONFLUENCE_EMAIL=you@your-company.com
 CONFLUENCE_API_TOKEN=<your-confluence-api-token>   # id.atlassian.com → API tokens
 CONFLUENCE_SPACE_KEY=ENG
 CONFLUENCE_MAX_DOCS=0
-# Optional — index just ONE page + all its child/descendant pages (a subtree)
+# Optional, index just ONE page + all its child/descendant pages (a subtree)
 # instead of the whole space. Accepts a page id or an exact page title:
 # CONFLUENCE_ROOT_PAGE=Engineering Handbook
 ```
 
 > **Scope:** by default KAI indexes the **whole space** (`CONFLUENCE_SPACE_KEY`).
 > Set `CONFLUENCE_ROOT_PAGE` to a page (id or exact title) to index **only that
-> page and everything beneath it** — handy for pointing KAI at one section of a
+> page and everything beneath it**, handy for pointing KAI at one section of a
 > large corporate space.
 
 ```bash
@@ -214,8 +214,8 @@ chunking; **`reset-db`**/**`fresh`** are destructive (clean-slate rebuild).
 | Bot exits asking for a token | Set `WEBEX_BOT_TOKEN` in `.env`. |
 | Bot can't reach the API | Run `python run/setup.py start` first; check `KAI_API_URL`. |
 | Answers look stale | Re-run `python run/setup.py ingest` after the source changes. |
-| Web UI can't reach the API (CORS error in the browser console) | Add the UI's exact origin to `CORS_ORIGINS` in `.env` and restart — it's deny-by-default. The shipped `.env.example` already allows `http://localhost:3000` and `:5173`. |
-| Bot doesn't respond in an office space | Your org may restrict bots — have an admin allow-list the bot's email. |
+| Web UI can't reach the API (CORS error in the browser console) | Add the UI's exact origin to `CORS_ORIGINS` in `.env` and restart. It's deny-by-default. The shipped `.env.example` already allows `http://localhost:3000` and `:5173`. |
+| Bot doesn't respond in an office space | Your org may restrict bots, have an admin allow-list the bot's email. |
 
 ---
 

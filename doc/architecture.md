@@ -1,8 +1,8 @@
-# KAI — Architecture & How It Works
+# KAI, Architecture & How It Works
 
 **Author:** Rahul Mahadik
 
-This document explains how KAI works internally — the ingest and answer
+This document explains how KAI works internally: the ingest and answer
 pipelines, the design choices behind "never give a confident wrong answer", and
 the swappable provider boundaries. For setup and running, see
 [`setup-and-run.md`](setup-and-run.md).
@@ -24,7 +24,7 @@ kai/                          # the Python package
 │   ├── chunk.py              #   header/title-aware chunking
 │   ├── ask.py                #   retrieve → answer → cite → escalate (the guards)
 │   ├── verify.py             #   LLM grounding/verification pass
-│   ├── multiquery.py         #   query reformulation   (+ rewrite.py — query rewrite)
+│   ├── multiquery.py         #   query reformulation   (+ rewrite.py, query rewrite)
 │   ├── prompt.py             #   strict, citation-instructed prompt
 │   └── inform.py             #   approval-gated curated-answer loop
 ├── chat/                     # one brain, many surfaces
@@ -45,11 +45,11 @@ kai/                          # the Python package
 
 frontend/                     # standalone web chat UI (one HTML file, no build step)
 run/setup.py                  # install · start · ingest · reindex · ui · bot · doctor · fresh
-eval/                         # golden eval + bot simulator (run_eval.py, simulate_bot.py, …)
+eval/                         # golden eval + bot simulator (run_eval.py, simulate_bot.py, ...)
 samples/                      # bundled ORIGINAL sample docs (01–05)
 tests/                        # pytest suite
 doc/                          # documentation (you are here)
-deploy/                       # Docker / systemd deploy assets
+deploy/                       # systemd unit + Slack app manifest
 pyproject.toml                # packaging + optional extras: [bot] [slack] [teams] [rerank] [dev]
 ```
 
@@ -60,7 +60,7 @@ base, and for each question it retrieves the most relevant passages, decides
 whether it is confident enough to answer, and either writes a grounded, cited
 answer or escalates to a human. It is built to run **self-hosted**: point the
 LLM + embeddings at a local OpenAI-compatible server (e.g. Ollama) and use a
-local Postgres/pgvector, and the cross-encoder reranker runs in-process — so your
+local Postgres/pgvector, and the cross-encoder reranker runs in-process, so your
 documents and questions can stay on your own infrastructure. The provider
 boundaries are OpenAI-compatible, so you can equally point them at a hosted
 endpoint. Note the knowledge source (Confluence) and escalation tracker (Jira)
@@ -96,7 +96,7 @@ ASK      question
 ```
 
 Every external dependency sits behind a small Protocol in
-[`kai/interfaces.py`](../kai/interfaces.py) — `Embedder`, `LLMClient`,
+[`kai/interfaces.py`](../kai/interfaces.py), `Embedder`, `LLMClient`,
 `VectorStore`, `KBSource`, `Tracker`. `kai/factory.py` constructs the real
 implementation of each from config, so models and sources are swapped by
 configuration, not code.
@@ -108,20 +108,20 @@ configuration, not code.
 `kai/pipeline/ingest.py` pulls every document from the `KBSource`, chunks it,
 embeds the chunks, and upserts them into the vector store.
 
-1. **Source** — `ConfluenceCloudKBSource` pages through a Confluence space (or a
+1. **Source**, `ConfluenceCloudKBSource` pages through a Confluence space (or a
    single page + its descendants when `CONFLUENCE_ROOT_PAGE` is set), yielding
    the raw storage-format HTML per page. Auth is optional (anonymous for public
    spaces, Basic auth for private).
-2. **Chunking** — `kai/pipeline/chunk.py`:
+2. **Chunking**, `kai/pipeline/chunk.py`:
    - cleans the storage HTML to text, turning headings into section markers;
    - **header-aware** splitting keeps each section coherent and carries its
      heading into every chunk;
    - **title-aware**: the page title is prepended to each chunk's text, so the
      title's distinctive terms ride into both the embedding and the lexical
      index. This is what stops a *"BloodHound proposal"* query from matching a
-     near-identical *"Lucene proposal"* chunk — the bodies look alike, the titles
+     near-identical *"Lucene proposal"* chunk: the bodies look alike, the titles
      disambiguate.
-3. **Embed + store** — chunks are embedded in batches via the OpenAI-compatible
+3. **Embed + store**, chunks are embedded in batches via the OpenAI-compatible
    `/embeddings` endpoint and upserted into Postgres + pgvector. Chunk ids are
    stable (`"{doc_id}#{ordinal}"`), so re-ingesting overwrites rather than
    duplicating.
@@ -133,7 +133,7 @@ Re-ingest is **incremental and safe**: a per-document SHA-256 content hash lets 
 unchanged page skip chunk+embed+upsert entirely, and each changed document is
 replaced atomically (embed first, then delete-and-insert in one transaction) so an
 embedder failure can never leave it half-written. A full crawl also **prunes** docs
-removed upstream — guarded by a mass-delete refusal and a "seen but skipped" set so a
+removed upstream, guarded by a mass-delete refusal and a "seen but skipped" set so a
 transient blip can't delete valid pages.
 
 ---
@@ -142,12 +142,12 @@ transient blip can't delete valid pages.
 
 `VectorStore.search` (pgvector) does **hybrid** retrieval in one round-trip:
 
-- **Dense** — cosine distance (`<=>`) against the query embedding (HNSW index);
-- **Lexical** — `websearch_to_tsquery` full-text against a generated `tsvector`
+- **Dense**, cosine distance (`<=>`) against the query embedding (HNSW index);
+- **Lexical**, `websearch_to_tsquery` full-text against a generated `tsvector`
   column (GIN index);
 - the two ranked lists are fused with **Reciprocal Rank Fusion (RRF)**.
 
-The store also returns each chunk's raw cosine similarity (`vector_score`) — an
+The store also returns each chunk's raw cosine similarity (`vector_score`), an
 *absolute* relevance signal used later by the confidence gate (the RRF score is
 rank-based and sits near the top even for an off-topic query, so it cannot tell
 "answerable" from "off-topic"; cosine similarity can).
@@ -155,11 +155,11 @@ rank-based and sits near the top even for an off-topic query, so it cannot tell
 ### Reranking
 
 A **cross-encoder** (`sentence-transformers`, e.g. `ms-marco-MiniLM`) re-scores
-each `(query, chunk)` pair jointly — far more precise than the bi-encoder cosine
+each `(query, chunk)` pair jointly, far more precise than the bi-encoder cosine
 used for first-stage retrieval. When reranking is on, KAI over-fetches a wider
 candidate pool (`RERANK_CANDIDATES`), reranks it, and keeps `TOP_K`. This
 promotes the right passage to the top (recall@k ≫ recall@1, so the right page is
-usually retrieved — the reranker gets it to #1).
+usually retrieved: the reranker gets it to #1).
 
 ### Multi-query expansion (optional)
 
@@ -172,21 +172,21 @@ question.
 
 ---
 
-## 4. The confidence gate — the heart of "never give wrong info"
+## 4. The confidence gate: the heart of "never give wrong info"
 
 Before any answer is generated, `kai/pipeline/ask.py::_confidence` scores how
 well the question is actually covered by the retrieved passages:
 
-- **Primary signal** — the best cosine similarity (`vector_score`) blended with
+- **Primary signal**: the best cosine similarity (`vector_score`) blended with
   the calibrated cross-encoder relevance (`sigmoid` of the top rerank logit).
   These are *absolute* relevance measures.
-- **Secondary signal** — lexical coverage of the question's content words in the
+- **Secondary signal**, lexical coverage of the question's content words in the
   retrieved chunks.
 
 `confidence = relevance × (0.5 + 0.5 × coverage)`, clamped to [0, 1].
 
 If `confidence < CONFIDENCE_THRESHOLD` (or nothing was retrieved), KAI
-**escalates without calling the LLM** — the decision is retrieval-based, so the
+**escalates without calling the LLM**. The decision is retrieval-based, so the
 model's output would be discarded anyway. This is what makes an out-of-scope
 question ("how do I reset my VPN?") escalate instead of being answered from a
 weakly-related passage.
@@ -202,7 +202,7 @@ When the gate clears, `kai/pipeline/prompt.py` builds a strict, citation-instruc
 prompt: the retrieved passages are numbered sources, and the model must
 
 - use **only** facts in the context (no outside knowledge),
-- answer about the **exact subject** the question names — if the sources are
+- answer about the **exact subject** the question names, if the sources are
   about a *different* but similar item, say "I don't know" rather than answer
   about the wrong one,
 - cite each claim as `[n]`, and
@@ -211,20 +211,20 @@ prompt: the retrieved passages are numbered sources, and the model must
 
 After generation, several guards run:
 
-- **IDK detection** — a refusal (the model's "I don't know", or an uncited reply
+- **IDK detection**: a refusal (the model's "I don't know", or an uncited reply
   containing a refusal phrase) escalates.
-- **Trailing-IDK strip** — a contradictory "I don't know" appended after a real
+- **Trailing-IDK strip**: a contradictory "I don't know" appended after a real
   answer is removed.
-- **Deterministic grounding guards** (no LLM, always on) — escalate if the answer
+- **Deterministic grounding guards** (no LLM, always on), escalate if the answer
   states a concrete *specific* (a dotted class/identifier or config URI) absent
   from every source, or a *significant number* not found in any source, or draws
   too little of its vocabulary from the sources (`ANSWER_GROUNDING_MIN`). An
   optional per-sentence semantic check (`SENTENCE_GROUNDING`) catches recombination
   fabrication the bag-of-words check misses.
-- **Citations** — only the sources the model actually cited (`[n]`) are returned,
+- **Citations**, only the sources the model actually cited (`[n]`) are returned,
   de-duplicated by URL and renumbered 1:1 with the Sources list; any model-emitted
   "Sources:" block is stripped (the UI/chat render the real list).
-- **Verification pass (`VERIFY_ANSWERS`, on by default)** — a second LLM check that
+- **Verification pass (`VERIFY_ANSWERS`, on by default)**: a second LLM check that
   the answer is supported by its sources and about the right subject; if not, KAI
   escalates. Strongest guard against the confusable-document failure, at the cost
   of one extra LLM call; it **fails open** (a verifier error doesn't block a good
@@ -238,7 +238,7 @@ When KAI cannot answer confidently, `Tracker.create_issue` records the
 escalation. With Jira configured, it opens a real ticket (description rendered as
 Atlassian Document Format) and the answer links to it. With no tracker
 configured, `LocalTracker` logs the escalation and the user sees a "flagged for a
-human to review" message with **no** link — honest, no fake URL. The closest
+human to review" message with **no** link, honest, no fake URL. The closest
 retrieved sources are recorded for whoever picks it up.
 
 ---
@@ -251,12 +251,12 @@ retrieved sources are recorded for whoever picks it up.
 | `LLMClient`   | OpenAI-compatible `/chat/completions`                      |
 | `VectorStore` | Postgres + pgvector (hybrid: dense + full-text, fused with RRF) |
 | Reranker      | cross-encoder via `sentence-transformers`                 |
-| `KBSource`    | Confluence (Cloud or public/anonymous)                    |
+| `KBSource`    | Confluence (Cloud or public/anonymous), local files (PDF / md / txt / html), or both |
 | `Tracker`     | Jira Cloud REST v3; `LocalTracker` when unconfigured      |
 
 `build_providers` is real-only and **fails loudly** if a required value is blank.
 Adding a new knowledge source (SharePoint, Notion, a folder of docs, a website)
-is a single new provider implementing `KBSource.iter_pages` — no pipeline change.
+is a single new provider implementing `KBSource.iter_pages`: no pipeline change.
 Swapping the LLM or embedder is a config change (an embedder change requires a
 re-ingest, since vector dimensions change).
 
@@ -264,7 +264,7 @@ re-ingest, since vector dimensions change).
 
 ## 8. Serving surfaces
 
-- **HTTP API** (`kai/app.py`) — `POST /ask` (grounded answer or escalation),
+- **HTTP API** (`kai/app.py`), `POST /ask` (grounded answer or escalation),
   `POST /ask-document` (ad-hoc Q&A over an uploaded file, never stored),
   `POST /search` (retrieve-only), `POST /feedback`, `POST /escalate`,
   `POST /notify`, `GET /metrics`, `GET /health`, and maintainer routes under
@@ -274,11 +274,11 @@ re-ingest, since vector dimensions change).
   interactive docs + `/openapi.json` are hidden too. CORS is deny-by-default. A
   generic 500 handler hides internals; the reranker is pre-warmed at startup.
 - **Chat bots** (`kai/chat/`, run via `python -m kai.bot`, selected by
-  `CHAT_PLATFORM`) — **Webex** and **Slack** open an **outbound** websocket (no
+  `CHAT_PLATFORM`), **Webex** and **Slack** open an **outbound** websocket (no
   public URL); **Teams** serves an inbound Bot Framework webhook. All are thin
   clients over the same `ChatService` → `/ask`. Webex has per-domain/per-user
   access control and inbound file Q&A.
-- **Web UI** (`frontend/`) — a standalone, dependency-free browser app that calls
+- **Web UI** (`frontend/`): a standalone, dependency-free browser app that calls
   `/ask` (and `/ask-document` for the 📎 upload) over CORS.
 
 ---
@@ -295,27 +295,27 @@ re-ingest, since vector dimensions change).
 | Stale / fake escalation links | `LocalTracker` (no fake URL) |
 
 The through-line: **prefer escalation over a confident wrong answer.** Every
-layer is tuned so that when KAI does answer, it is grounded and cited — and when
+layer is tuned so that when KAI does answer, it is grounded and cited, and when
 it isn't sure, it says so.
 
 ---
 
-## 10. Inform — learning from escalations (approval-gated)
+## 10. Inform, learning from escalations (approval-gated)
 
 The **I** in KAI. Questions KAI couldn't answer become a review queue, and a
-human-approved answer is curated back into the knowledge base — **never
+human-approved answer is curated back into the knowledge base, **never
 auto-published** (`kai/pipeline/inform.py`, the `/admin/inform*` endpoints):
 
-1. **Gaps** — every `/ask` is recorded by `kai/telemetry.py`; `GET /admin/gaps`
+1. **Gaps**, every `/ask` is recorded by `kai/telemetry.py`; `GET /admin/gaps`
    surfaces the most-escalated questions (the content-gap backlog).
-2. **Submit** — a maintainer posts an answer for a gap (`POST /admin/inform`); it
+2. **Submit**: a maintainer posts an answer for a gap (`POST /admin/inform`); it
    lands as **pending**, indexed nowhere yet.
-3. **Approve** — `POST /admin/inform/{id}/approve` synthesizes the Q+A into a
+3. **Approve**, `POST /admin/inform/{id}/approve` synthesizes the Q+A into a
    curated `Doc` (`space="kai-curated"`), pushed through the same chunk→embed→upsert
    path. Indexing happens **only** here. Optional 4-eyes (`INFORM_REQUIRE_SEPARATE_APPROVER`)
    requires the approver to differ from the author; on approval the original asker
    is DM'd. A curated answer is labelled as community-reviewed when served.
-4. **Self-correction** — 👍/👎 (`POST /feedback`) is recorded; enough 👎 on a curated
+4. **Self-correction**, 👍/👎 (`POST /feedback`) is recorded; enough 👎 on a curated
    answer auto-**quarantines** it (un-indexed for re-review). `reject`/`revoke`
    drop or pull an entry.
 

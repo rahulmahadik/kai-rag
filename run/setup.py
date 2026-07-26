@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""KAI setup & run CLI — a small, dependency-free launcher.
+"""KAI setup & run CLI: a small, dependency-free launcher.
 
 One FastAPI app + Postgres/pgvector. Uses its OWN port and database so it never
 clashes with anything else running on this machine.
@@ -42,7 +42,7 @@ VENV = ROOT / ".venv"
 LOG = Path("/tmp/kai.api.log")
 PIDFILE = ROOT / ".kai.pid"
 
-# KAI's own port/DB — deliberately distinct from any sibling app (e.g. 8090).
+# KAI's own port/DB, deliberately distinct from any sibling app (e.g. 8090).
 KAI_PORT = os.environ.get("KAI_PORT", "8100")
 KAI_HOST = os.environ.get("KAI_HOST", "127.0.0.1")
 KAI_DB = os.environ.get("KAI_DB", "kai")
@@ -130,10 +130,10 @@ def port_pids(port: str) -> list[str]:
 def do_install() -> None:
     print("KAI install")
     if not _py().exists():
-        info("creating virtualenv (.venv)…")
+        info("creating virtualenv (.venv)...")
         subprocess.run([sys.executable, "-m", "venv", str(VENV)], check=True)
     ok("venv ready")
-    info("installing dependencies…")
+    info("installing dependencies...")
     subprocess.run([str(_bin("pip")), "install", "-q", "--upgrade", "pip"], check=False)
     subprocess.run([str(_bin("pip")), "install", "-q", *DEPS], check=True)
     ok("dependencies installed")
@@ -156,15 +156,15 @@ def _ensure_env() -> None:
         import shutil
 
         shutil.copyfile(example, env)
-        ok("created .env from .env.example — edit it (LLM / DB / Confluence) before ingest")
+        ok("created .env from .env.example, edit it (LLM / DB / Confluence) before ingest")
     else:
-        info("no .env or .env.example found — create a .env before starting")
+        info("no .env or .env.example found, create a .env before starting")
 
 
 def _ensure_db() -> None:
     probe = psql("SELECT 1")
     if probe.returncode != 0:
-        err(f"Postgres not reachable at {PGUSER}@{PGHOST}:{PGPORT} — start it, then re-run.")
+        err(f"Postgres not reachable at {PGUSER}@{PGHOST}:{PGPORT}, start it, then re-run.")
         return
     exists = psql(f"SELECT 1 FROM pg_database WHERE datname='{KAI_DB}'").stdout.strip() == "1"
     if exists:
@@ -187,10 +187,12 @@ def do_start() -> None:
     for pid in port_pids(KAI_PORT):  # clear a stale holder of the port
         subprocess.run(["kill", "-9", pid], check=False)
     if not _bin("uvicorn").exists():
-        err("uvicorn missing — run `python run/setup.py install` first.")
+        err("uvicorn missing, run `python run/setup.py install` first.")
         return
     print(f"KAI starting on http://{KAI_HOST}:{KAI_PORT}")
-    fh = open(LOG, "ab")
+    # Deliberately NOT a context manager: the handle is inherited by the uvicorn
+    # child as its stdout/stderr and must stay open after this function returns.
+    fh = open(LOG, "ab")  # noqa: SIM115
     proc = subprocess.Popen(
         [str(_bin("uvicorn")), "kai.app:app", "--host", KAI_HOST, "--port", KAI_PORT],
         cwd=str(ROOT),
@@ -201,11 +203,11 @@ def do_start() -> None:
     PIDFILE.write_text(str(proc.pid))
     for _ in range(60):
         if get_health():
-            ok(f"up — API {health_url()}  ·  docs http://{KAI_HOST}:{KAI_PORT}/docs")
+            ok(f"up, API {health_url()}  ·  docs http://{KAI_HOST}:{KAI_PORT}/docs")
             info(f"logs: {LOG}")
             return
         time.sleep(1)
-    err(f"did not become healthy in time — check {LOG}")
+    err(f"did not become healthy in time, check {LOG}")
 
 
 def do_stop() -> None:
@@ -232,19 +234,19 @@ def do_restart() -> None:
 def do_supervise() -> None:
     """Keep the API alive: start it, then restart whenever /health stops responding.
 
-    Run this instead of ``start`` for an unattended demo — if uvicorn dies (crash,
+    Run this instead of ``start`` for an unattended demo, if uvicorn dies (crash,
     OOM, etc.) it is brought back within a few seconds, so a long demo or eval
     never silently goes dark. Ctrl-C to quit.
     """
 
-    info("supervising the API — auto-restart on failure (Ctrl-C to stop)")
+    info("supervising the API, auto-restart on failure (Ctrl-C to stop)")
     misses = 0
     while True:
         if get_health():
             misses = 0
         else:
             misses += 1
-            info(f"API not healthy (miss #{misses}) — (re)starting…")
+            info(f"API not healthy (miss #{misses}), (re)starting...")
             do_stop()
             time.sleep(1)
             do_start()
@@ -264,7 +266,7 @@ def do_status() -> None:
 
 
 def do_reset_db() -> None:
-    print("KAI reset-db (drops the ENTIRE KAI database — index, curated answers, telemetry)")
+    print("KAI reset-db (drops the ENTIRE KAI database, index, curated answers, telemetry)")
     do_stop()
     subprocess.run(
         ["dropdb", "-h", PGHOST, "-p", PGPORT, "-U", PGUSER, "--if-exists", KAI_DB],
@@ -280,9 +282,9 @@ def do_reset_db() -> None:
 
 def do_ingest() -> None:
     if not get_health():
-        err("API not running — `python run/setup.py start` first.")
+        err("API not running, `python run/setup.py start` first.")
         return
-    info("ingesting the configured knowledge source (.env CONFLUENCE_*)…")
+    info("ingesting the configured knowledge source (.env CONFLUENCE_*)...")
     req = _req.Request(f"http://{KAI_HOST}:{KAI_PORT}/ingest", method="POST")
     try:
         with _req.urlopen(req, timeout=900) as r:
@@ -293,9 +295,9 @@ def do_ingest() -> None:
 
 def do_reindex() -> None:
     if not get_health():
-        err("API not running — `python run/setup.py start` first.")
+        err("API not running, `python run/setup.py start` first.")
         return
-    info("rebuilding the vector index from scratch (sources + approved curated)…")
+    info("rebuilding the vector index from scratch (sources + approved curated)...")
     req = _req.Request(f"http://{KAI_HOST}:{KAI_PORT}/admin/reindex", method="POST")
     try:
         with _req.urlopen(req, timeout=1800) as r:
@@ -338,7 +340,7 @@ def do_doctor() -> None:
     try:
         with _req.urlopen("http://localhost:11434/api/tags", timeout=3) as r:
             n = len(json.loads(r.read()).get("models", []))
-            ok(f"ollama up on :11434 ({n} models) — for real local LLM/embeddings")
+            ok(f"ollama up on :11434 ({n} models), for real local LLM/embeddings")
     except Exception:
         info("ollama not reachable on :11434 (only needed for real local models)")
     h = get_health()
@@ -350,12 +352,12 @@ def do_doctor() -> None:
 def do_fresh() -> None:
     """Full clean rebuild: WIPE the database, then install, start, and ingest.
 
-    Destructive by design — ``fresh`` means a clean slate, so it drops the existing
+    Destructive by design, ``fresh`` means a clean slate, so it drops the existing
     index (and curated answers / feedback / telemetry) before re-ingesting. To keep
     existing data, use ``ingest`` (incremental) or ``reindex`` (vector-only rebuild).
     """
 
-    info("fresh: WIPING the database for a clean rebuild (drops everything)…")
+    info("fresh: WIPING the database for a clean rebuild (drops everything)...")
     do_install()
     do_reset_db()
     do_start()
@@ -365,18 +367,19 @@ def do_fresh() -> None:
 def do_ui() -> None:
     """Serve the standalone web chat UI (frontend/) for browser testing.
 
-    The frontend is a SEPARATE static app that calls the API over HTTP/CORS — set
+    The frontend is a SEPARATE static app that calls the API over HTTP/CORS, set
     its API base in the page header if the API isn't on the default port.
     """
 
     index = ROOT / "frontend" / "index.html"
     if not index.exists():
-        err("frontend/index.html not found — nothing to serve.")
+        err("frontend/index.html not found, nothing to serve.")
         return
     ui_port = os.environ.get("KAI_UI_PORT", "3000")
     info(
         f"serving the web UI at http://localhost:{ui_port}  (API expected at "
-        f"http://{KAI_HOST}:{KAI_PORT}; set the API base in the header if different; Ctrl-C to stop)…"
+        f"http://{KAI_HOST}:{KAI_PORT}; set the API base in the header "
+        "if different; Ctrl-C to stop)..."
     )
     subprocess.run(
         [str(_py()), "-m", "http.server", ui_port, "-d", str(ROOT / "frontend")],
@@ -408,11 +411,11 @@ def do_bot() -> None:
     # The chat bot is a thin websocket/webhook client over the running KAI API. The
     # platform (and the tokens it needs) are selected by CHAT_PLATFORM in .env.
     if not get_health():
-        err("API not running — `python run/setup.py start` first (the bot calls /ask).")
+        err("API not running, `python run/setup.py start` first (the bot calls /ask).")
         return
     platform = _configured_platform()
     tokens = _BOT_TOKENS.get(platform, "the platform tokens")
-    info(f"starting the KAI {platform} bot (needs {tokens} in .env; Ctrl-C to stop)…")
+    info(f"starting the KAI {platform} bot (needs {tokens} in .env; Ctrl-C to stop)...")
     subprocess.run([str(_py()), "-m", "kai.bot"], cwd=str(ROOT), check=False)
 
 

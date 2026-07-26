@@ -4,7 +4,7 @@
 implementation of each provider Protocol the application uses, constructed from
 :class:`~kai.config.Settings`. Every provider is REAL (network/DB-backed):
 
-* embedder, LLM, vector store and Confluence knowledge source are REQUIRED — a
+* embedder, LLM, vector store and Confluence knowledge source are REQUIRED, a
   blank config raises loudly rather than silently degrading;
 * the escalation tracker is real Jira when configured, otherwise a local tracker
   that records escalations without opening an external ticket.
@@ -41,7 +41,7 @@ def _require(ok: bool, what: str, *envs: str) -> None:
 def _effective_env(settings: Settings) -> dict[str, str]:
     """Merge the ``.env`` file (which pydantic reads but does NOT export to
     ``os.environ``) with the process environment, so numbered multi-instance keys
-    (``CONFLUENCE_2_BASE_URL`` …) are visible whether set in ``.env`` (local dev) or
+    (``CONFLUENCE_2_BASE_URL`` ...) are visible whether set in ``.env`` (local dev) or
     the shell/container (Docker). ``os.environ`` wins on conflict."""
 
     merged: dict[str, str] = {}
@@ -71,7 +71,7 @@ def _confluence_instances(settings: Settings) -> list[Settings]:
     matching ``_SPACE_KEY`` / ``_EMAIL`` / ``_API_TOKEN`` / ``_ROOT_PAGE`` /
     ``_MAX_DOCS``.
 
-    Auth is INDEPENDENT per instance — a numbered instance never inherits the flat
+    Auth is INDEPENDENT per instance: a numbered instance never inherits the flat
     instance's email/token. So you can freely mix a private site (its own
     email+token) with a public/anonymous one (neither), and a half-configured
     instance (only one of the two) still fails loudly. Only ``_MAX_DOCS`` falls back
@@ -99,7 +99,7 @@ def _confluence_instances(settings: Settings) -> list[Settings]:
                 update={
                     "confluence_base_url": base,
                     "confluence_space_key": (env.get(f"CONFLUENCE_{i}_SPACE_KEY") or "").strip(),
-                    # Auth is per-instance — NEVER inherit the flat instance's
+                    # Auth is per-instance: NEVER inherit the flat instance's
                     # credentials (so a private #1 + public #2 mix stays correct).
                     "confluence_email": (env.get(f"CONFLUENCE_{i}_EMAIL") or "").strip(),
                     "confluence_api_token": (env.get(f"CONFLUENCE_{i}_API_TOKEN") or "").strip(),
@@ -110,7 +110,7 @@ def _confluence_instances(settings: Settings) -> list[Settings]:
                 }
             )
         )
-    # Numbered keys present without a base URL (typo / mis-numbered block) — warn so a
+    # Numbered keys present without a base URL (typo / mis-numbered block), warn so a
     # block like CONFLUENCE_12_SPACE_KEY meant for #2 isn't silently dropped.
     incomplete = {
         int(m.group(1))
@@ -122,7 +122,7 @@ def _confluence_instances(settings: Settings) -> list[Settings]:
     } - set(indices)
     for i in sorted(incomplete):
         logger.warning(
-            "kai_confluence_instance_incomplete index=%d — CONFLUENCE_%d_* set but no "
+            "kai_confluence_instance_incomplete index=%d, CONFLUENCE_%d_* set but no "
             "CONFLUENCE_%d_BASE_URL; that instance is ignored.",
             i,
             i,
@@ -150,9 +150,9 @@ def _build_kb(settings: Settings) -> KBSource:
     """Build the knowledge source(s) from ``SOURCE_TYPE`` (fail loud on blanks).
 
     ``confluence`` (default), ``files`` (local PDF/md/txt/html), or both
-    (``confluence+files`` / ``both``). Each type can have MULTIPLE sources — several
+    (``confluence+files`` / ``both``). Each type can have MULTIPLE sources, several
     Confluence instances (numbered ``CONFLUENCE_<n>_*``) and/or several directories
-    (``SOURCE_DIRS``) — all combined via ``CompositeKBSource``.
+    (``SOURCE_DIRS``), all combined via ``CompositeKBSource``.
     """
 
     st = (settings.source_type or "confluence").strip().lower()
@@ -179,7 +179,7 @@ def _build_kb(settings: Settings) -> KBSource:
                 "+ CONFLUENCE_SPACE_KEY (or CONFLUENCE_<n>_BASE_URL for several instances) "
                 "in your .env."
             )
-        # base_url + space_key are enough — auth is optional (anonymous public spaces).
+        # base_url + space_key are enough, auth is optional (anonymous public spaces).
         # Each instance's CONFLUENCE_SPACE_KEY may be comma-separated (multi-space):
         # one connector per (instance, space); chunks keep their own space tag, so
         # retrieval needs no change.

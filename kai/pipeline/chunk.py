@@ -21,7 +21,7 @@ import re
 from kai.interfaces import Chunk, Doc
 
 # Approximate target/overlap sizing, measured in whitespace tokens. These are
-# deliberately coarse — exact tokenisation is the model's job; we only need
+# deliberately coarse, exact tokenisation is the model's job; we only need
 # chunks small enough to embed and large enough to be self-contained.
 _TARGET_TOKENS = 500
 _OVERLAP_TOKENS = 60
@@ -48,7 +48,7 @@ _HEADING_LINE_RE = re.compile(r"^#{1,6}\s+(.+)$")
 # Confluence structured macros, inline-comment markers and resource tags.
 _MACRO_RE = re.compile(r"</?(?:ac|ri):[^>]*>", re.IGNORECASE)
 # Whole non-content blocks (tag + body) for real-web HTML files: script/style/head
-# bodies and comments — removed before generic tag stripping so their text doesn't leak.
+# bodies and comments, removed before generic tag stripping so their text doesn't leak.
 _SCRIPT_STYLE_RE = re.compile(r"<(script|style|head)\b[^>]*>.*?</\1>", re.IGNORECASE | re.DOTALL)
 _COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 # Any remaining HTML/XML tag.
@@ -56,10 +56,13 @@ _TAG_RE = re.compile(r"<[^>]+>")
 # Collapse runs of blank lines / whitespace.
 _MULTI_NEWLINE_RE = re.compile(r"\n{3,}")
 _MULTI_SPACE_RE = re.compile(r"[ \t]{2,}")
+# Control chars (tab/newline/CR excluded). Postgres `text` rejects NUL outright,
+# so one stray NUL would fail a document's whole ingest.
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
 
 
-def _heading_sub(m: "re.Match[str]") -> str:
-    """Replace an ``<h1-6>…</h1-6>`` element with a ``## Title`` marker line."""
+def _heading_sub(m: re.Match[str]) -> str:
+    """Replace an ``<h1-6>...</h1-6>`` element with a ``## Title`` marker line."""
 
     level = int(m.group(1))
     inner = _TAG_RE.sub(" ", m.group(2))
@@ -81,7 +84,7 @@ def html_to_text(html: str) -> str:
 
     text = html
     # Drop non-content blocks WHOLE (tag + body) before anything else. Confluence
-    # storage HTML has none of these, but real-web .html files do — and the generic
+    # storage HTML has none of these, but real-web .html files do, and the generic
     # tag strip below would otherwise leave the JS/CSS/comment TEXT behind.
     text = _SCRIPT_STYLE_RE.sub(" ", text)
     text = _COMMENT_RE.sub(" ", text)
@@ -96,7 +99,7 @@ def html_to_text(html: str) -> str:
     # Drop Confluence structured-macro / resource tags, then any other tag.
     text = _MACRO_RE.sub(" ", text)
     text = _TAG_RE.sub(" ", text)
-    # Unescape entities (&amp; &lt; &nbsp; …).
+    # Unescape entities (&amp; &lt; &nbsp; ...).
     text = _html.unescape(text)
     return _normalise_ws(text)
 
@@ -107,9 +110,13 @@ def _normalise_ws(text: str) -> str:
     Shared by :func:`html_to_text` and the plain-text path so file-sourced content
     (PDF/markdown/txt) gets the same whitespace tidy-up WITHOUT any tag stripping
     or entity handling (which would corrupt prose containing ``<`` or ``&``).
+
+    Also the single place control characters are stripped, so every body that
+    becomes a chunk is sanitised once.
     """
 
-    lines = [ln.strip() for ln in (text or "").split("\n")]
+    text = _CONTROL_CHARS_RE.sub("", text or "")
+    lines = [ln.strip() for ln in text.split("\n")]
     text = "\n".join(lines)
     text = _MULTI_SPACE_RE.sub(" ", text)
     text = _MULTI_NEWLINE_RE.sub("\n\n", text)
@@ -117,7 +124,7 @@ def _normalise_ws(text: str) -> str:
 
 
 def _split_tokens(text: str) -> list[str]:
-    """Whitespace token split — the unit our window sizing counts in."""
+    """Whitespace token split: the unit our window sizing counts in."""
 
     return text.split()
 
@@ -175,7 +182,7 @@ def _split_sections(text: str) -> list[tuple[str | None, str]]:
     in_fence = False  # inside a ``` / ~~~ fenced code block
     for line in text.split("\n"):
         stripped = line.strip()
-        if stripped.startswith("```") or stripped.startswith("~~~"):
+        if stripped.startswith(("```", "~~~")):
             in_fence = not in_fence
             lines.append(line)
             continue
@@ -234,7 +241,7 @@ def chunk_body(
 
     Shared by :func:`chunk_document` (corpus ingest) and
     :func:`kai.pipeline.ask.answer_from_document` (ad-hoc upload) so the SAME bytes
-    get the SAME treatment on either path — an uploaded ``.html`` is tag-stripped and
+    get the SAME treatment on either path: an uploaded ``.html`` is tag-stripped and
     markdown gets heading-aware chunking, instead of the LLM seeing raw markup.
 
     Routing by content_type:
@@ -279,7 +286,7 @@ def chunk_document(
         # Prepend the page title to each chunk's text so the title's distinctive
         # terms ride into BOTH the embedding and the lexical index. This is what
         # stops a "BloodHound proposal" query from matching a near-identical
-        # "Lucene proposal" chunk — the bodies look alike, the titles disambiguate.
+        # "Lucene proposal" chunk: the bodies look alike, the titles disambiguate.
         body = f"{title}\n{piece}" if title else piece
         chunks.append(
             Chunk(

@@ -1,8 +1,8 @@
-"""Webex adapter — the transport-specific half of the KAI chat bot.
+"""Webex adapter: the transport-specific half of the KAI chat bot.
 
 Outbound websocket (webex_bot SDK): no public URL / firewall change needed. All
 "what to answer" logic lives in :class:`kai.chat.service.ChatService`; this file
-only handles Webex specifics — receiving @mentions/card-actions, the typing-ack
+only handles Webex specifics, receiving @mentions/card-actions, the typing-ack
 substitute (pre_execute), threaded replies (SDK ``threads=True``), the 7439-byte
 message split, the Adaptive Card feedback affordance, and the supervised reconnect
 loop. The ``webex_bot`` SDK is imported lazily inside :meth:`run`.
@@ -34,10 +34,16 @@ logger = logging.getLogger("kai.chat.webex")
 WEBEX_MARKDOWN_LIMIT = 7000
 _WEBEX_API = "https://webexapis.com/v1/messages"
 
+# Supervised reconnect: delay between restarts, doubling up to the cap. A session
+# lasting at least _RECONNECT_HEALTHY_RUN counts as a real connection and resets it.
+_RECONNECT_BASE = 5.0
+_RECONNECT_MAX = 300.0
+_RECONNECT_HEALTHY_RUN = 60.0
+
 
 # --------------------------------------------------------------------------- #
 # Raw Webex REST helpers (edit + DM are not in the SDK; call the API directly
-# with the bot token). All return-or-None / bool, never raise — the caller
+# with the bot token). All return-or-None / bool, never raise: the caller
 # falls back to the SDK's normal reply path on any failure.
 # --------------------------------------------------------------------------- #
 def _hdr(token: str) -> dict:
@@ -63,7 +69,7 @@ def create_message(token: str, **fields) -> str | None:
 
 
 def edit_message(token: str, message_id: str, room_id: str, markdown: str) -> bool:
-    """PUT /messages/{id} — edit a bot message in place (the ack → the answer).
+    """PUT /messages/{id}, edit a bot message in place (the ack → the answer).
 
     Not in the SDK. Caveats (Webex): ≤10 edits/message; a message bearing a
     file/Adaptive-Card attachment cannot be edited (so the feedback card is a
@@ -86,7 +92,7 @@ def edit_message(token: str, message_id: str, room_id: str, markdown: str) -> bo
 
 
 def delete_message(token: str, message_id: str) -> bool:
-    """DELETE /messages/{id} — remove a bot message (e.g. a stale 'Searching…' ack
+    """DELETE /messages/{id}, remove a bot message (e.g. a stale 'Searching...' ack
     when an in-place edit failed and we're posting the answer fresh). Best-effort."""
 
     try:
@@ -100,10 +106,10 @@ def delete_message(token: str, message_id: str) -> bool:
 
 
 def send_direct_message(token: str, person_email: str, markdown: str) -> bool:
-    """POST /messages with toPersonEmail — proactively DM a user (1:1).
+    """POST /messages with toPersonEmail, proactively DM a user (1:1).
 
     Webex auto-creates/reuses the 1:1 space. The user must have messaged the bot
-    at least once (bots can't cold-DM strangers) — true for anyone KAI answered.
+    at least once (bots can't cold-DM strangers), true for anyone KAI answered.
     """
 
     return create_message(token, toPersonEmail=person_email, markdown=markdown) is not None
@@ -139,7 +145,7 @@ def download_file(token: str, url: str, max_bytes: int = 0) -> tuple[str, bytes]
     """Download a Webex file (bot-token auth). Returns (filename, bytes) or None.
 
     Streams the body so an oversized attachment is rejected (by Content-Length, then
-    mid-download) WITHOUT buffering the whole file into the bot's memory first —
+    mid-download) WITHOUT buffering the whole file into the bot's memory first,
     ``max_bytes<=0`` disables the cap.
     """
 
@@ -231,7 +237,7 @@ def feedback_card(question: str, *, escalate_only: bool = False) -> dict:
 
 
 def webex_reply(ask_json: dict, question: str, *, show_card: bool) -> tuple[list[str], dict | None]:
-    """Compute the Webex message pieces + optional feedback card — PURE, testable.
+    """Compute the Webex message pieces + optional feedback card, PURE, testable.
 
     Always returns at least one (possibly empty) piece. When ``show_card`` is on, a
     confident answer rides the 👍/👎 card; an escalation rides a single "Escalate to a
@@ -245,7 +251,7 @@ def webex_reply(ask_json: dict, question: str, *, show_card: bool) -> tuple[list
 
 
 def memory_key(room: str | None, parent: str | None, activity: dict) -> tuple:
-    """Conversation-memory key — PURE, testable.
+    """Conversation-memory key, PURE, testable.
 
     Keyed by ``(thread/room, sender)`` so two people talking to the bot in ONE
     thread keep SEPARATE follow-up context (no cross-user leakage).
@@ -264,7 +270,7 @@ class WebexAdapter:
         self._s = settings
         self._service = ChatService(settings)
 
-    def run(self) -> None:  # noqa: C901 — one cohesive transport setup
+    def run(self) -> None:
         settings, service = self._s, self._service
         token = settings.webex_bot_token.strip()
         if not token:
@@ -297,11 +303,11 @@ class WebexAdapter:
         token = settings.webex_bot_token.strip()
         edit_in_place = getattr(settings, "webex_edit_in_place", True)
         use_memory = getattr(settings, "conversation_memory", False)
-        ACK = getattr(settings, "bot_ack_message", None) or "🔎 _Searching the knowledge base…_"
+        ACK = getattr(settings, "bot_ack_message", None) or "🔎 _Searching the knowledge base..._"
         convo: dict[tuple, str] = {}  # (thread/room, sender) -> last question (bounded)
         convo_lock = threading.Lock()  # the SDK runs execute() across worker threads
 
-        def _room_thread(activity):  # noqa: ANN001 — best-effort id extraction
+        def _room_thread(activity):  # noqa: ANN001 - best-effort id extraction
             room = (activity.get("target") or {}).get("globalId") or activity.get("roomId")
             parent = (activity.get("parent") or {}).get("id") or activity.get("id")
             return room, parent
@@ -310,7 +316,7 @@ class WebexAdapter:
             """Prepend the PREVIOUS question's topic to a referential follow-up so it
             retrieves in context. Pure (``prev`` is read under the lock by the caller,
             atomically with the write). The enriched query still runs the FULL gate +
-            guards — context can never make an out-of-scope question fabricate."""
+            guards, context can never make an out-of-scope question fabricate."""
 
             if not prev:
                 return text
@@ -350,14 +356,14 @@ class WebexAdapter:
             def pre_execute(self, message, attachment_actions, activity):  # noqa: ANN001
                 if edit_in_place or not (message or "").strip():
                     return None  # ack handled in execute() (edited later), or nothing to do
-                return "🔎 On it — searching the knowledge base…"
+                return "🔎 On it, searching the knowledge base..."
 
             def execute(self, message, attachment_actions, activity):  # noqa: ANN001
                 text = (message or "").strip()
                 if not text:
                     return (
                         "Hi! I'm KAI. Ask me anything about the knowledge base and I'll "
-                        "answer with sources — type **help** to see what I can do, or "
+                        "answer with sources, type **help** to see what I can do, or "
                         "attach a file and ask about it."
                     )
                 if is_help_request(text):
@@ -368,9 +374,9 @@ class WebexAdapter:
 
                 # Inbound file Q&A: if the user attached a file, answer about THAT
                 # document (ad-hoc RAG) instead of the corpus. A file the user clearly
-                # MEANT to ask about must never silently fall through to corpus Q&A —
+                # MEANT to ask about must never silently fall through to corpus Q&A,
                 # that would look like the attachment was ignored. (We can only fail to
-                # LIST the attachments — that path falls through to corpus Q&A.)
+                # LIST the attachments. That path falls through to corpus Q&A.)
                 msg_id = activity.get("id")
                 if token and msg_id:
                     try:
@@ -382,10 +388,10 @@ class WebexAdapter:
                         dl = download_file(token, files[0], max_bytes=max_bytes)
                         if not dl:
                             # A file WAS attached but we couldn't read it (too large, or
-                            # the download failed) — say so rather than quietly answering
+                            # the download failed), say so rather than quietly answering
                             # the question against the corpus and ignoring the file.
                             return (
-                                "Sorry — I couldn't read that attachment. It may be larger "
+                                "Sorry. I couldn't read that attachment. It may be larger "
                                 "than I can handle; try a smaller file, or ask me in text."
                             )
                         fname, data = dl
@@ -393,16 +399,16 @@ class WebexAdapter:
                         reply_md = derr if doc is None else format_reply(doc)
                         if doc is not None and not doc.get("escalated"):
                             # Make the scope explicit: the file was used ONLY for this
-                            # question, in this thread — it's not stored or added to the KB.
+                            # question, in this thread. It's not stored or added to the KB.
                             reply_md += (
                                 f"\n\n_(Answered from **{fname}** just for this question in "
-                                "this thread — the file isn't stored or added to the "
+                                "this thread. The file isn't stored or added to the "
                                 "knowledge base.)_"
                             )
                         pieces = split_message(reply_md, WEBEX_MARKDOWN_LIMIT) or [""]
                         # The document answer is ALREADY computed, so there's nothing to
-                        # wait on — post it directly IN-THREAD (parentId). No ack to edit
-                        # (which could dangle as a stray "Searching…" if the edit failed).
+                        # wait on, post it directly IN-THREAD (parentId). No ack to edit
+                        # (which could dangle as a stray "Searching..." if the edit failed).
                         if token and room:
                             for p in pieces:
                                 create_message(token, roomId=room, parentId=parent, markdown=p)
@@ -424,7 +430,7 @@ class WebexAdapter:
                 query = _enrich(text, prev)
 
                 # Edit-in-place: post the ack NOW, then edit it into the answer when
-                # ready — no delete/repost churn, keeps thread position. Falls back to
+                # ready: no delete/repost churn, keeps thread position. Falls back to
                 # a normal reply if anything in the direct-REST path fails.
                 ack_id = None
                 if edit_in_place and token and room:
@@ -441,7 +447,7 @@ class WebexAdapter:
                     # Edit the ack into the first piece ("Here's what I found:" framing),
                     # post any overflow pieces, then the card as a separate message
                     # (a card-bearing message can't be edited). Never prepend the
-                    # "Here's what I found:" framing to an ESCALATION — it didn't answer.
+                    # "Here's what I found:" framing to an ESCALATION. It didn't answer.
                     prefix = (
                         ""
                         if data.get("escalated")
@@ -452,7 +458,7 @@ class WebexAdapter:
                         for p in pieces[1:]:
                             create_message(token, roomId=room, parentId=parent, markdown=p)
                         if card is not None:
-                            # card can't ride on the edited message — post it as a
+                            # card can't ride on the edited message, post it as a
                             # small in-thread follow-up via the SDK return value.
                             label = (
                                 "_Need a person on this?_"
@@ -461,7 +467,7 @@ class WebexAdapter:
                             )
                             return _responses([label], card)
                         return None
-                    # edit failed — delete the stale ack so it doesn't dangle, then
+                    # edit failed, delete the stale ack so it doesn't dangle, then
                     # fall through to a normal (fresh) reply.
                     delete_message(token, ack_id)
                 return _responses(pieces, card)
@@ -517,14 +523,15 @@ class WebexAdapter:
             )
         else:
             logger.warning(
-                "kai_bot_open — answering anyone in the space. Set "
+                "kai_bot_open, answering anyone in the space. Set "
                 "WEBEX_APPROVED_DOMAINS / WEBEX_APPROVED_USERS to restrict."
             )
 
         # Supervised reconnect loop: a websocket crash that escapes the SDK's own
         # retry would otherwise kill the bot silently.
-        backoff = 5.0
+        backoff = _RECONNECT_BASE
         while True:
+            started = time.monotonic()
             try:
                 bot = WebexBot(
                     teams_bot_token=token,
@@ -535,17 +542,21 @@ class WebexAdapter:
                 )
                 bot.add_command(_FeedbackCommand())
                 logger.info("kai_bot_starting api=%s", settings.kai_api_url)
-                backoff = 5.0
                 bot.run()
-                logger.warning("kai_bot_stopped — restarting in %.0fs", backoff)
+                logger.warning("kai_bot_stopped, restarting in %.0fs", backoff)
             except KeyboardInterrupt:
                 raise
-            except Exception as exc:  # noqa: BLE001 — supervised: log, back off, retry
+            except Exception as exc:  # noqa: BLE001 - supervised: log, back off, retry
                 logger.error(
-                    "kai_bot_crashed err=%s: %s — restarting in %.0fs",
+                    "kai_bot_crashed err=%s: %s, restarting in %.0fs",
                     type(exc).__name__,
                     exc,
                     backoff,
                 )
+            # Reset only after a session that actually stayed up. Resetting on every
+            # pass (which is what happens if this runs before bot.run()) pins the
+            # delay at the base value, so a crash-loop reconnects flat out forever.
+            if time.monotonic() - started >= _RECONNECT_HEALTHY_RUN:
+                backoff = _RECONNECT_BASE
             time.sleep(backoff)
-            backoff = min(backoff * 2, 300.0)
+            backoff = min(backoff * 2, _RECONNECT_MAX)

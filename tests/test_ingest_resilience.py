@@ -25,7 +25,7 @@ class _Embedder:
     dimensions = 4
 
     def embed(self, texts):
-        # Fail only on document 1's batch — simulates a transient per-doc error.
+        # Fail only on document 1's batch, simulates a transient per-doc error.
         if any("number 1 " in t for t in texts):
             raise RuntimeError("simulated embed failure")
         return [[0.1, 0.2, 0.3, 0.4] for _ in texts]

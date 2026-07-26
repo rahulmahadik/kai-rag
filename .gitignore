@@ -236,8 +236,8 @@ models/
 .claude/settings.local.json
 .claude/settings.json
 
-# Internal dev/validation artifacts — kept locally, NOT for the public repo
+# Local-only scratch and generated release staging
 internal/
-
-# Built public-release copies (own git repos)
 release/
+
+.DS_Store

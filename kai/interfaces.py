@@ -5,14 +5,15 @@ dataclasses describe the data flowing through the pipeline; the
 ``typing.Protocol`` classes describe the swappable provider boundaries
 (embeddings, LLM, vector store, knowledge-base source, tracker).
 
-Nothing here imports heavy SDKs — it is pure typing so it is always safe
+Nothing here imports heavy SDKs. It is pure typing so it is always safe
 to import.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Iterable, Protocol, Sequence, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -21,13 +22,13 @@ from typing import Iterable, Protocol, Sequence, runtime_checkable
 
 @dataclass
 class Doc:
-    """A raw knowledge-base document (a Confluence page, a PDF, a text file, …)
+    """A raw knowledge-base document (a Confluence page, a PDF, a text file, ...)
     before chunking.
 
-    ``html`` holds the document body (the field name is historical — it carries
+    ``html`` holds the document body (the field name is historical. It carries
     Confluence storage-format HTML, but also plain text from file sources).
     ``content_type`` tells the chunker how to clean it: ``"html"`` (strip
-    macros/tags) or ``"text"`` (already-plain text from a PDF/markdown/txt source —
+    macros/tags) or ``"text"`` (already-plain text from a PDF/markdown/txt source,
     used verbatim, never HTML-stripped).
     """
 
@@ -69,7 +70,7 @@ class ScoredChunk:
     """A :class:`Chunk` paired with its retrieval relevance score.
 
     ``score`` is the (rank-based) fusion score used for ordering. ``vector_score``
-    is the raw cosine similarity of the chunk vs the query (≈0..1) — an *absolute*
+    is the raw cosine similarity of the chunk vs the query (≈0..1), an *absolute*
     relevance signal the answer pipeline uses to decide whether the question is
     actually covered by the knowledge base (vs answering off-topic).
     """

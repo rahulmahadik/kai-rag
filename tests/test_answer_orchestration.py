@@ -1,4 +1,4 @@
-"""Integration tests for answer_question — the never-fabricate critical path.
+"""Integration tests for answer_question: the never-fabricate critical path.
 
 Fake providers, no network/DB: assert the ORCHESTRATION (gate short-circuit,
 IDK escalation, fabrication guard, tracker resilience, citation finalization,
@@ -79,17 +79,17 @@ class FakeTracker:
 
 
 def _settings(**over) -> Settings:
-    base = dict(
-        multi_query=False,
-        query_rewrite=False,
-        reranker="noop",
-        verify_answers=False,
-        confidence_threshold=0.45,
-        answer_grounding_min=0.48,
-        sentence_grounding=False,
-        embed_query_prefix="",
-        embed_passage_prefix="",
-    )
+    base = {
+        "multi_query": False,
+        "query_rewrite": False,
+        "reranker": "noop",
+        "verify_answers": False,
+        "confidence_threshold": 0.45,
+        "answer_grounding_min": 0.48,
+        "sentence_grounding": False,
+        "embed_query_prefix": "",
+        "embed_passage_prefix": "",
+    }
     base.update(over)
     return Settings(**base)
 

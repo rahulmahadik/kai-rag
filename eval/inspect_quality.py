@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Adversarial output-quality inspection — runs real questions through the live
+"""Adversarial output-quality inspection, runs real questions through the live
 /ask API and flags USER-FACING issues the accuracy eval doesn't catch:
 
   - citation markers that don't match the Sources list (count/contiguity)
@@ -14,6 +14,7 @@ running server.
 """
 
 from __future__ import annotations
+
 import json
 import re
 import sys
@@ -21,7 +22,7 @@ from pathlib import Path
 from urllib import request as _req
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from kai.config import get_settings  # noqa: E402
+from kai.config import get_settings
 
 QUESTIONS = [
     "How do I use the replication tool?",
@@ -84,7 +85,7 @@ def flags(ans: str, cites: list) -> list[str]:
             break
     # Whitespace/punctuation artifacts are judged on PROSE only: code spans keep
     # legitimate empty parens (`commitSync()`), and line-leading runs are markdown
-    # indentation (nested lists / code blocks) — both are CORRECT output that the
+    # indentation (nested lists / code blocks), both are CORRECT output that the
     # code-aware tidy deliberately preserves.
     prose_segs = [
         seg
@@ -93,7 +94,7 @@ def flags(ans: str, cites: list) -> list[str]:
     ]
     if any(re.search(r"\S[ \t]{2,}\S", seg) for seg in prose_segs):  # intra-line run
         out.append("DOUBLE_SPACE")
-    # Empty parens/brackets count as artifacts only when FREE-STANDING — glued to
+    # Empty parens/brackets count as artifacts only when FREE-STANDING, glued to
     # an identifier they are function/array references (`brokerStartup()`), which
     # are correct content the tidy deliberately preserves even unbackticked.
     if any(

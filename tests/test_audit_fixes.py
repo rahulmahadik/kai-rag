@@ -144,7 +144,7 @@ def test_prune_skipped_when_a_source_errored():
     store.rows["stale-page"] = 1
     store.rows["page-current"] = 1
     ingest_from(_Emb(), store, _ErroredKB(), prune=True)
-    assert "stale-page" in store.rows  # prune skipped — a partial crawl isn't trusted
+    assert "stale-page" in store.rows  # prune skipped: a partial crawl isn't trusted
     assert "page-current" in store.rows
 
 
@@ -169,7 +169,7 @@ def test_ip_and_version_strings_not_flagged():
 
 
 def test_number_reformatting_not_flagged():
-    # Same VALUE, different text — must NOT be treated as fabricated (was a false +).
+    # Same VALUE, different text, must NOT be treated as fabricated (was a false +).
     assert _fabricated_numbers("It allows 5000.0 connections.", [_sc("limit is 5,000")]) is None
     assert _fabricated_numbers("Scale to 1,000,000 rows.", [_sc("up to 1e6 rows")]) is None
     assert _fabricated_numbers("The rate is 0.50.", [_sc("rate of 0.5 applies")]) is None
@@ -278,7 +278,7 @@ def test_incremental_skips_unchanged_and_reembeds_on_url_or_space_change():
 
 # ---- round 2: numeric-guard false-positive / false-negative edges -------------
 def test_sentence_comma_does_not_make_small_int_significant():
-    # "3, 4" must NOT be flagged — a sentence comma isn't a thousands separator.
+    # "3, 4" must NOT be flagged: a sentence comma isn't a thousands separator.
     src = [_sc("no numbers here at all")]
     assert _fabricated_numbers("There are 3, possibly 4, options available.", src) is None
     assert _fabricated_numbers("Run step 7, then restart.", src) is None

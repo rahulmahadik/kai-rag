@@ -1,4 +1,4 @@
-"""Microsoft Teams adapter — pure parsing/routing helpers (no Azure/network).
+"""Microsoft Teams adapter, pure parsing/routing helpers (no Azure/network).
 
 The live Connector reply + Bot-Framework-auth round-trip needs a real Azure tenant
 and a public endpoint (verified in-tenant). These tests pin the parsing that decides

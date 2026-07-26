@@ -1,10 +1,10 @@
 """Optional cross-encoder reranker (second-stage retrieval precision).
 
-First-stage retrieval (bi-encoder cosine + BM25) is fast but coarse — the right
+First-stage retrieval (bi-encoder cosine + BM25) is fast but coarse: the right
 page is usually in the top-k, just not always at #1 (recall@k >> recall@1). A
 **cross-encoder** scores each ``(query, chunk)`` pair *jointly*, which is far more
 precise, and we use it to REORDER the candidates so the most relevant chunk is
-promoted to the top — improving the cited page + the answer's grounding.
+promoted to the top, improving the cited page + the answer's grounding.
 
 It does not change which chunks were found (recall is unchanged); it only changes
 their order. The cosine ``vector_score`` is preserved on each chunk so the
@@ -17,7 +17,7 @@ model is loaded once and cached, so importing this module is cheap.
 from __future__ import annotations
 
 import threading
-from typing import Sequence
+from collections.abc import Sequence
 
 from kai.interfaces import ScoredChunk
 
@@ -27,14 +27,10 @@ _MODELS: dict[str, object] = {}
 # build the model (they share the one cached instance instead).
 _LOCK = threading.Lock()
 
-# ms-marco-MiniLM (the default cross-encoder) has a 512 wordpiece limit and
-# predict() SILENTLY truncates a longer (query, chunk) pair — so for a ~500-token
-# chunk it would only ever score the chunk's HEAD and never see a fact in the
-# back half. To avoid that we slide a character window over each chunk, score
-# every window, and keep the MAX — so the whole chunk gets a fair shot at the top
-# rank even though each individual scored span fits the model. Char-based (cheap,
-# tokenizer-free); ~1000 chars stays comfortably under 512 wordpieces for prose
-# and well under it for token-dense text. Overlap keeps a fact off a boundary.
+# ms-marco-MiniLM silently truncates a pair past 512 wordpieces, so a long chunk
+# would only ever be scored on its head. Slide a character window and keep the max
+# instead. ~1000 chars stays under the limit; the overlap keeps a fact off a
+# window boundary.
 _RERANK_WINDOW_CHARS = 1000
 _RERANK_WINDOW_OVERLAP = 200
 
@@ -46,7 +42,17 @@ def _get_model(model_name: str):
     with _LOCK:
         model = _MODELS.get(model_name)  # re-check inside the lock
         if model is None:
-            from sentence_transformers import CrossEncoder  # lazy: pulls torch
+            try:
+                from sentence_transformers import CrossEncoder  # lazy: pulls torch
+            except ModuleNotFoundError as exc:
+                # RERANKER=cross_encoder without the extra installed. Say which of
+                # the two things to change; the bare ImportError surfaced as a 500
+                # on every question with nothing pointing at the cause.
+                raise RuntimeError(
+                    "RERANKER=cross_encoder needs the 'rerank' extra: install it with "
+                    "pip install '.[rerank]' (Docker: --build-arg EXTRAS=bot,slack,rerank), "
+                    "or set RERANKER=noop to run without the cross-encoder."
+                ) from exc
 
             # Downloads on first use, then cached on disk by huggingface_hub.
             model = CrossEncoder(model_name)

@@ -2,13 +2,13 @@
 
 One small, dependency-light module:
 
-* ``record_ask``      — one structured log line + one ``kai_questions`` row per
+* ``record_ask``: one structured log line + one ``kai_questions`` row per
   ``/ask`` (confidence, escalated, citations, latency). This is what makes the
-  confidence gate MEASURABLE in production — without it the core "never wrong"
+  confidence gate MEASURABLE in production, without it the core "never wrong"
   control is unobservable.
-* ``record_feedback`` — persists 👍/👎/escalate-anyway into ``kai_feedback``
+* ``record_feedback``, persists 👍/👎/escalate-anyway into ``kai_feedback``
   (the human signal the accuracy loop consumes).
-* ``metrics_text``    — Prometheus text exposition of in-process counters (no
+* ``metrics_text``, Prometheus text exposition of in-process counters (no
   prometheus_client dependency).
 
 All DB writes are BEST-EFFORT: a telemetry failure is logged and never breaks
@@ -40,7 +40,7 @@ class Telemetry:
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
-    def _connect(self):  # noqa: ANN202 — psycopg connection
+    def _connect(self):  # noqa: ANN202 - psycopg connection
         import psycopg
 
         return psycopg.connect(self._db)
@@ -87,7 +87,7 @@ class Telemetry:
     # ------------------------------------------------------------------
     def record_cache_hit(self) -> None:
         """A /ask served from the answer cache: count it as an ask + a cache hit, but
-        do NOT touch the latency average (no compute happened — a 0ms entry would skew
+        do NOT touch the latency average (no compute happened: a 0ms entry would skew
         it) or write a duplicate question row (it was recorded when first answered)."""
 
         self._bump("kai_asks_total")
@@ -142,7 +142,7 @@ class Telemetry:
                         ),
                     )
                 conn.commit()
-        except Exception as exc:  # noqa: BLE001 — telemetry never breaks a request
+        except Exception as exc:  # noqa: BLE001 - telemetry never breaks a request
             logger.warning("kai_telemetry_write_failed err=%s", type(exc).__name__)
 
     def record_feedback(self, question: str, verdict: str, reporter: str) -> None:
@@ -174,7 +174,7 @@ class Telemetry:
         return "\n".join(lines) + "\n"
 
     def gaps(self, limit: int = 50) -> list[dict]:
-        """Most-escalated questions (normalized) — the knowledge-gap signal."""
+        """Most-escalated questions (normalized): the knowledge-gap signal."""
 
         try:
             with self._connect() as conn:

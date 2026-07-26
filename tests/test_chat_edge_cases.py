@@ -29,7 +29,7 @@ def _s(**o):
 
 
 # ======================================================================= #
-# format_reply — the shared answer content (every shape /ask can return)
+# format_reply: the shared answer content (every shape /ask can return)
 # ======================================================================= #
 @pytest.mark.parametrize(
     "payload,must,mustnt",
@@ -97,7 +97,7 @@ def test_format_reply_dedup_count():
 
 
 # ======================================================================= #
-# split_message — sizing across boundaries + unicode
+# split_message, sizing across boundaries + unicode
 # ======================================================================= #
 def test_split_empty_and_short():
     assert split_message("", 100) == []
@@ -133,7 +133,7 @@ def test_split_unicode_is_byte_safe():
 
 
 # ======================================================================= #
-# Slack rendering — mrkdwn + Block Kit
+# Slack rendering, mrkdwn + Block Kit
 # ======================================================================= #
 @pytest.mark.parametrize(
     "md,expect",
@@ -176,18 +176,18 @@ def test_slack_never_emits_empty_text_block():
 
 
 def test_slack_feedback_blocks_action_ids():
-    actions = [b for b in feedback_blocks("q") if b["type"] == "actions"][0]["elements"]
+    actions = next(b for b in feedback_blocks("q") if b["type"] == "actions")["elements"]
     assert {a["action_id"] for a in actions} == {"kai_fb_up", "kai_fb_down", "kai_fb_escalate"}
 
 
 # ======================================================================= #
-# Webex rendering — pieces + Adaptive Card
+# Webex rendering, pieces + Adaptive Card
 # ======================================================================= #
 def test_webex_reply_card_confident_vs_escalation():
-    p, c = webex_reply({"answer": "A.", "escalated": False}, "q", show_card=True)
+    _p, c = webex_reply({"answer": "A.", "escalated": False}, "q", show_card=True)
     assert c is not None and c["type"] == "AdaptiveCard"
     assert {a["data"]["verdict"] for a in c["actions"]} == {"up", "down", "escalate"}
-    p, c = webex_reply({"answer": "Esc.", "escalated": True}, "q", show_card=True)
+    _p, c = webex_reply({"answer": "Esc.", "escalated": True}, "q", show_card=True)
     # escalation → a single "Escalate to a human" card (not None)
     assert c is not None
     assert {a["data"]["verdict"] for a in c["actions"]} == {"escalate"}
@@ -212,7 +212,7 @@ def test_webex_card_verdicts():
 
 
 # ======================================================================= #
-# ChatService — every HTTP outcome maps to a sane reply, never raises
+# ChatService, every HTTP outcome maps to a sane reply, never raises
 # ======================================================================= #
 class _R:
     def __init__(self, status, payload=None, bad_json=False):
@@ -305,7 +305,7 @@ def test_is_help_request(text, expect):
 
 
 def test_help_text_advertises_key_capabilities():
-    # The one place users learn what KAI can do — must name asking, file upload,
+    # The one place users learn what KAI can do, must name asking, file upload,
     # and escalation so "help" is genuinely discoverable.
     assert "Attach a file" in HELP_TEXT
     assert "escalate" in HELP_TEXT.lower()
@@ -322,7 +322,7 @@ def test_service_feedback_survives_post_failure(monkeypatch):
 
     monkeypatch.setattr(httpx, "post", _boom)
     svc = ChatService(_s())
-    # A dead endpoint must NOT claim success — never-fabricate at the feedback layer:
+    # A dead endpoint must NOT claim success: never-fabricate at the feedback layer:
     # it returns a clear "couldn't" message (and never raises).
     esc = svc.handle_feedback(FeedbackEvent(verdict="escalate", question="q")).lower()
     assert "couldn't" in esc and "follow up" not in esc
@@ -331,7 +331,7 @@ def test_service_feedback_survives_post_failure(monkeypatch):
 
 
 # ======================================================================= #
-# Webex REST helpers — success / API-error / exception (never raise)
+# Webex REST helpers, success / API-error / exception (never raise)
 # ======================================================================= #
 def test_webex_rest_success(monkeypatch):
     monkeypatch.setattr(httpx, "post", lambda *a, **k: _R(200, {"id": "M1"}))

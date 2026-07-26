@@ -1,4 +1,4 @@
-"""Microsoft Teams adapter — inbound Bot Framework webhook.
+"""Microsoft Teams adapter, inbound Bot Framework webhook.
 
 Unlike Webex/Slack (outbound websocket, no public URL), Teams is **inbound**: Azure
 Bot Service POSTs each Activity to an HTTPS endpoint you host. This adapter serves
@@ -10,7 +10,7 @@ REQUIRES (see doc/integrations-setup.md): an Azure Bot registration
 (`TEAMS_APP_ID` + `TEAMS_APP_PASSWORD`), a **public HTTPS URL** pointing at
 `/api/messages`, and the extra: `pip install '.[teams]'`.
 
-⚠️ Shipped but NOT integration-tested from this repo — it needs a live Azure tenant +
+⚠️ Shipped but NOT integration-tested from this repo. It needs a live Azure tenant +
 public endpoint to exercise. The pure parsing/routing helpers (`parse_activity`,
 `_strip_mention`, `build_reply_activity`) ARE unit-tested; the Connector + auth
 round-trip must be verified in your tenant.
@@ -37,7 +37,7 @@ _TEAMS_TEXT_LIMIT = 25_000  # headroom under Teams' ~28KB message cap (split lon
 
 
 # --------------------------------------------------------------------------- #
-# Pure helpers (no network) — unit-tested
+# Pure helpers (no network), unit-tested
 # --------------------------------------------------------------------------- #
 def _strip_mention(text: str) -> str:
     """Remove the bot @mention (Teams wraps it as ``<at>Name</at>``) and trim."""
@@ -50,7 +50,7 @@ def parse_activity(activity: dict) -> tuple[str, IncomingMessage | None, Feedbac
 
     Returns ``(kind, message, feedback)`` where kind is ``"message"`` (a question →
     /ask), ``"feedback"`` (an Adaptive-Card 👍/👎/escalate tap → /feedback|/escalate),
-    or ``"ignore"`` (anything else). Pure — safe to unit-test without Azure.
+    or ``"ignore"`` (anything else). Pure, safe to unit-test without Azure.
     """
 
     if activity.get("type") != "message":
@@ -105,7 +105,7 @@ class TeamsAdapter:
 
     name = "teams"
 
-    def __init__(self, settings) -> None:  # noqa: ANN001 — Settings, avoid import cycle
+    def __init__(self, settings) -> None:  # noqa: ANN001 - Settings, avoid import cycle
         self._service = ChatService(settings)
         self._app_id = (getattr(settings, "teams_app_id", "") or "").strip()
         self._app_password = (getattr(settings, "teams_app_password", "") or "").strip()
@@ -125,14 +125,14 @@ class TeamsAdapter:
         """Validate the inbound Bot Framework JWT, or REFUSE when unconfigured.
 
         With no ``TEAMS_APP_ID`` we cannot verify the caller, so we reject rather than
-        accept unauthenticated activities — an open webhook could be driven to reply
+        accept unauthenticated activities: an open webhook could be driven to reply
         (and leak a connector token to an attacker-supplied ``serviceUrl``). When
         ``expected_service_url`` is given we also bind it to the token's ``serviceurl``
         claim, so a valid token can't redirect our connector reply to another host."""
 
         if not self._app_id:
             raise RuntimeError(
-                "Teams is not configured (TEAMS_APP_ID unset) — refusing inbound requests. "
+                "Teams is not configured (TEAMS_APP_ID unset), refusing inbound requests. "
                 "Set TEAMS_APP_ID / TEAMS_APP_PASSWORD to run the Teams bot."
             )
         try:
@@ -148,7 +148,7 @@ class TeamsAdapter:
         )
         # Bind the reply target to the token: when we have an activity serviceUrl, the
         # token MUST carry a matching serviceurl claim. A missing/empty/mismatched claim
-        # is a hard failure — otherwise a signed token with no claim could redirect our
+        # is a hard failure, otherwise a signed token with no claim could redirect our
         # connector reply (and its bearer token) to an attacker-supplied host.
         claim_url = (claims.get("serviceurl") or "").rstrip("/")
         if expected_service_url and claim_url.lower() != expected_service_url.rstrip("/").lower():
@@ -160,7 +160,7 @@ class TeamsAdapter:
 
         # Serve a still-valid cached token under the lock; do the network fetch OUTSIDE
         # the lock so concurrent replies aren't serialized behind one token request
-        # (worst case two threads refresh at once — harmless, last write wins).
+        # (worst case two threads refresh at once, harmless, last write wins).
         with self._token_lock:
             if self._token and time.monotonic() < self._token_exp:
                 return self._token  # reuse until ~60s before expiry
@@ -195,7 +195,7 @@ class TeamsAdapter:
         url = f"{service_url}/v3/conversations/{conv}/activities"
         try:
             token = self._connector_token()
-        except Exception as exc:  # noqa: BLE001 — token fetch failed; nothing sent
+        except Exception as exc:  # noqa: BLE001 - token fetch failed; nothing sent
             logger.error("kai_teams_token_failed err=%s: %s", type(exc).__name__, exc)
             return
 
@@ -208,7 +208,7 @@ class TeamsAdapter:
                     timeout=30.0,
                 ).raise_for_status()
                 return True
-            except Exception as exc:  # noqa: BLE001 — log, never crash the webhook
+            except Exception as exc:  # noqa: BLE001 - log, never crash the webhook
                 logger.error("kai_teams_reply_failed err=%s: %s", type(exc).__name__, exc)
                 return False
 
@@ -218,12 +218,12 @@ class TeamsAdapter:
                 build_reply_activity(activity, piece, card if i == len(pieces) - 1 else None)
             )
             if not ok:
-                # A mid-stream failure would leave a SILENT truncated answer — tell the
+                # A mid-stream failure would leave a SILENT truncated answer, tell the
                 # user the reply was cut off (best-effort) rather than look complete.
                 if i > 0:
                     _send(
                         build_reply_activity(
-                            activity, "_(My reply was cut off — please ask again.)_", None
+                            activity, "_(My reply was cut off, please ask again.)_", None
                         )
                     )
                 return
@@ -243,11 +243,11 @@ class TeamsAdapter:
         conv = (activity.get("conversation") or {}).get("id")
         reply_to = activity.get("replyToId")
         if not (service_url and conv and reply_to):
-            self._reply(activity, text, None)  # nothing to update — just confirm
+            self._reply(activity, text, None)  # nothing to update, just confirm
             return
         try:
             token = self._connector_token()
-        except Exception as exc:  # noqa: BLE001 — token fetch failed; nothing sent
+        except Exception as exc:  # noqa: BLE001 - token fetch failed; nothing sent
             logger.error("kai_teams_token_failed err=%s: %s", type(exc).__name__, exc)
             return
         url = f"{service_url}/v3/conversations/{conv}/activities/{reply_to}"
@@ -258,7 +258,7 @@ class TeamsAdapter:
                 json={"type": "message", "text": text},
                 timeout=30.0,
             ).raise_for_status()
-        except Exception as exc:  # noqa: BLE001 — log, never crash the webhook
+        except Exception as exc:  # noqa: BLE001 - log, never crash the webhook
             logger.error("kai_teams_card_retire_failed err=%s: %s", type(exc).__name__, exc)
             self._reply(activity, text, None)  # fall back to a plain confirmation
 
@@ -283,7 +283,7 @@ class TeamsAdapter:
                 # Retire the tapped card so feedback can't be submitted repeatedly:
                 # Teams does NOT auto-disable Action.Submit, so the buttons stay live
                 # otherwise (parity with Slack's chat_update / Webex's delete-on-tap).
-                self._retire_card(activity, ack or "Thanks — feedback received.")
+                self._retire_card(activity, ack or "Thanks, feedback received.")
                 return Response(status_code=200)
             if kind == "message":
                 if is_help_request(msg.text):

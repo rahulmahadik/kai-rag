@@ -1,4 +1,4 @@
-"""Platform-neutral chat contracts — the seam every adapter implements.
+"""Platform-neutral chat contracts: the seam every adapter implements.
 
 Depends only on stdlib typing (no chat SDKs), exactly like kai.interfaces, so a
 new adapter file is the ONLY thing a new platform requires.
@@ -16,7 +16,7 @@ class IncomingMessage:
 
     text: str
     # An opaque per-platform sender id used for feedback attribution: a real email on
-    # Webex, a username on Slack, an Azure AD object id on Teams — NOT guaranteed to
+    # Webex, a username on Slack, an Azure AD object id on Teams: NOT guaranteed to
     # be an email. (Per-user access control for Slack/Teams is on the roadmap; Webex
     # has WEBEX_APPROVED_USERS/DOMAINS today.)
     sender_email: str = ""

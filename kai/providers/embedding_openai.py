@@ -17,7 +17,8 @@ This module is loaded only when the real embedder is used.
 
 from __future__ import annotations
 
-from typing import Sequence
+import threading
+from collections.abc import Sequence
 
 import httpx
 
@@ -57,17 +58,31 @@ class OpenAIEmbedder:
         self._model = model
         self._dimensions = int(dimensions)
         self._timeout = int(timeout)
-        # One reusable client per instance → HTTP keep-alive across calls (one TCP
-        # connection instead of a fresh one per /embeddings POST). Created lazily.
+        # Lazy, reusable client (HTTP keep-alive). Locked: handlers run in a
+        # threadpool, so an unguarded build leaks the loser's connections.
         self._http: httpx.Client | None = None
+        self._http_lock = threading.Lock()
 
     def _client(self) -> httpx.Client:
         if self._http is None:
-            self._http = httpx.Client(timeout=self._timeout)
+            with self._http_lock:
+                if self._http is None:
+                    self._http = httpx.Client(
+                        timeout=self._timeout,
+                        limits=httpx.Limits(max_connections=32, max_keepalive_connections=8),
+                    )
         return self._http
 
+    def close(self) -> None:
+        """Release the pooled connections. Idempotent; safe to call on a fresh client."""
+
+        with self._http_lock:
+            if self._http is not None:
+                self._http.close()
+                self._http = None
+
     @classmethod
-    def from_settings(cls, settings: Settings) -> "OpenAIEmbedder":
+    def from_settings(cls, settings: Settings) -> OpenAIEmbedder:
         """Build an embedder from a :class:`~kai.config.Settings` instance."""
 
         return cls(
@@ -75,7 +90,7 @@ class OpenAIEmbedder:
             api_key=settings.embed_api_key,
             model=settings.embed_model,
             dimensions=settings.embed_dimensions,
-            # Reuse the LLM timeout knob — embeddings share the same budget.
+            # Reuse the LLM timeout knob, embeddings share the same budget.
             timeout=settings.llm_timeout,
         )
 
@@ -95,7 +110,7 @@ class OpenAIEmbedder:
 
         Resilient to a short-context embedder rejecting an over-long chunk: on a
         4xx the batch is retried one item at a time, and any single item still
-        rejected is truncated and retried — so one oversized chunk cannot fail an
+        rejected is truncated and retried, so one oversized chunk cannot fail an
         entire ingest. Network errors, 5xx and malformed responses still raise.
         """
 
