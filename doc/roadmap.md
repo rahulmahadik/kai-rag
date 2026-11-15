@@ -34,8 +34,9 @@ today. This page records what ships now and what's planned next. Contributions w
 ## Planned
 
 ### More knowledge sources
-- Deeper crawl (link-following beyond sitemap seeds), and connectors for
-  SharePoint, Google Drive, and Git repos/wikis (GitHub/GitLab).
+- Richer crawl (robots.txt, auth, PDF pages), and connectors for SharePoint,
+  Google Drive, and Git repos/wikis (GitHub/GitLab). Same-host HTML link
+  following already ships with `SOURCE_URL_FOLLOW_LINKS`.
 
 ### Escalation & notifications, *raise a ticket / page a person*
 - Trackers beyond Jira/GitHub: ServiceNow, Linear, GitLab, or plain email.

@@ -250,7 +250,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="KAI, Know · Ask · Inform",
         description=_description,
-        version="1.2.0",
+        version="1.2.1",
         openapi_tags=_tags_meta,
         contact={"name": "Rahul Mahadik", "url": "https://rahulmahadik.com"},
         license_info={
@@ -551,13 +551,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=422, detail="email must be a valid address.")
         ok, detail = notify_user(settings, who, req.message)
         if not ok:
-            # Misconfiguration is a client error; delivery failure is upstream.
-            cfg_err = (
+            # Client mistakes / misconfig → 4xx; upstream delivery failure → 502.
+            client_err = (
                 "not configured" in detail
                 or "needs:" in detail
                 or detail.startswith("Teams proactive")
+                or "must be a user id" in detail
+                or "recipient and message" in detail
             )
-            raise HTTPException(status_code=400 if cfg_err else 502, detail=detail)
+            raise HTTPException(status_code=400 if client_err else 502, detail=detail)
         return {"status": "sent", "detail": detail}
 
     @app.get(

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.1
+
+### Added
+- **Same-host URL crawl.** With `SOURCE_URL_FOLLOW_LINKS` (default on), the URL
+  source follows `<a href>` links on the same host until `SOURCE_URL_MAX_PAGES`.
+
+### Fixed
+- **`POST /notify` returned 502 for a bad Slack recipient.** Invalid user ids
+  are now **400** (client error), not an upstream failure.
+
 ## 1.2.0
 
 Product release: more ways to escalate, ingest, notify, and curate, without

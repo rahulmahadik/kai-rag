@@ -18,7 +18,12 @@ SOURCE_DIR=/path/to/docs        # required when SOURCE_TYPE includes files
 SOURCE_URLS=https://docs.example.com/a,https://docs.example.com/b
 SOURCE_SITEMAP=https://docs.example.com/sitemap.xml
 SOURCE_URL_MAX_PAGES=100        # hard cap per ingest
+SOURCE_URL_FOLLOW_LINKS=true    # follow same-host links from HTML (default)
 ```
+
+Seeds and sitemap entries start the crawl; with `SOURCE_URL_FOLLOW_LINKS`
+(default on) KAI also follows same-host `<a href>` links until
+`SOURCE_URL_MAX_PAGES` is hit. Binary assets and cross-host links are skipped.
 
 Then ingest as usual: `python run/setup.py ingest` (or `POST /ingest`).
 For periodic refresh, `python run/setup.py schedule-ingest` prints cron /

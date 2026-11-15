@@ -177,6 +177,26 @@ def test_notify_invalid_email_422(monkeypatch):
     assert r.status_code == 422
 
 
+def test_notify_slack_bad_recipient_is_400(monkeypatch):
+    import kai.app as app_module
+    from kai.config import Settings
+
+    monkeypatch.setattr(app_module, "build_providers", _fake_providers)
+    s = Settings(
+        _env_file=None,
+        KAI_API_KEY="sekret",
+        chat_platform="slack",
+        slack_bot_token="xoxb-t",
+        reranker="noop",
+        database_url="",
+        answer_cache_size=0,
+    )
+    c = TestClient(app_module.create_app(s), raise_server_exceptions=False)
+    r = c.post("/notify", json={"recipient": "not-a-uid", "message": "x"}, headers=AUTH)
+    assert r.status_code == 400
+    assert "user id" in r.json()["detail"]
+
+
 def test_admin_inform_rejects_unknown_status(client):
     # An unknown status must 422 (not silently return everything).
     assert client.get("/admin/inform?status=bogus", headers=AUTH).status_code == 422

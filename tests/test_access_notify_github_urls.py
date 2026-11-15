@@ -14,7 +14,12 @@ from kai.chat.notify import notify_user
 from kai.config import Settings
 from kai.factory import build_providers
 from kai.providers.github_issues import GitHubIssuesTracker
-from kai.providers.url_source import UrlKBSource, _html_to_text, _parse_sitemap
+from kai.providers.url_source import (
+    UrlKBSource,
+    _html_to_text,
+    _parse_sitemap,
+    same_host_links,
+)
 
 
 def _settings(**over) -> Settings:
@@ -486,6 +491,68 @@ def test_url_source_skips_failed_fetches_and_short_bodies(monkeypatch) -> None:
     )
     assert len(docs) == 1
     assert docs[0].space == "url" and "plain-text" in docs[0].html
+
+
+def test_same_host_links_keeps_host_and_skips_assets() -> None:
+    html = """
+    <a href="/guide">Guide</a>
+    <a href="https://ex.com/a/">A</a>
+    <a href="https://other.com/x">nope</a>
+    <a href="/img.png">img</a>
+    <a href="#frag">frag</a>
+    """
+    links = same_host_links("https://ex.com/index", html)
+    assert "https://ex.com/guide" in links
+    assert "https://ex.com/a" in links
+    assert all("other.com" not in u for u in links)
+    assert all(not u.endswith(".png") for u in links)
+
+
+def test_url_source_follows_same_host_links(monkeypatch) -> None:
+    pages = {
+        "https://ex.com/start": (
+            "<html><head><title>Start</title></head>"
+            "<body><p>Start page with enough body text for ingest here.</p>"
+            '<a href="/next">Next</a></body></html>'
+        ),
+        "https://ex.com/next": (
+            "<html><head><title>Next</title></head>"
+            "<body><p>Next page also has enough body text for ingesting.</p>"
+            "</body></html>"
+        ),
+    }
+
+    class _RespOK:
+        status_code = 200
+
+        def __init__(self, text):
+            self.text = text
+            self.headers = {"content-type": "text/html"}
+
+    class _Client:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, url, follow_redirects=True):
+            return _RespOK(pages[url])
+
+    monkeypatch.setattr(httpx, "Client", _Client)
+    docs = list(
+        UrlKBSource(
+            _settings(
+                source_urls="https://ex.com/start",
+                source_url_max_pages=5,
+                source_url_follow_links=True,
+            )
+        ).iter_pages()
+    )
+    assert [d.title for d in docs] == ["Start", "Next"]
 
 
 def test_url_source_reads_sitemap(monkeypatch) -> None:

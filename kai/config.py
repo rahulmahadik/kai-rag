@@ -87,6 +87,8 @@ class Settings(BaseSettings):
     source_urls: str = ""  # comma-separated seed page URLs
     source_sitemap: str = ""  # sitemap.xml URL (urlset or sitemap index)
     source_url_max_pages: int = 100  # hard cap on pages fetched per ingest
+    # Follow same-host <a href> links from fetched HTML (still capped by max_pages).
+    source_url_follow_links: bool = True
 
     # ------------------------------------------------------------------
     # Confluence Cloud (knowledge base)
