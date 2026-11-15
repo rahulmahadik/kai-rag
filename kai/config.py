@@ -89,6 +89,8 @@ class Settings(BaseSettings):
     source_url_max_pages: int = 100  # hard cap on pages fetched per ingest
     # Follow same-host <a href> links from fetched HTML (still capped by max_pages).
     source_url_follow_links: bool = True
+    # Honour robots.txt per origin (User-agent matching KAI-url-source/…).
+    source_url_respect_robots: bool = True
 
     # ------------------------------------------------------------------
     # Confluence Cloud (knowledge base)

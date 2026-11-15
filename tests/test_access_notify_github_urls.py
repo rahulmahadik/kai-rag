@@ -511,7 +511,11 @@ def test_url_source_yields_docs_from_seeds(monkeypatch) -> None:
     monkeypatch.setattr(httpx, "Client", _Client)
     docs = list(
         UrlKBSource(
-            _settings(source_urls="https://ex.com/runbook", source_url_max_pages=5)
+            _settings(
+                source_urls="https://ex.com/runbook",
+                source_url_max_pages=5,
+                source_url_respect_robots=False,
+            )
         ).iter_pages()
     )
     assert len(docs) == 1
@@ -576,6 +580,7 @@ def test_url_source_skips_failed_fetches_and_short_bodies(monkeypatch) -> None:
                     "https://ex.com/plain,https://ex.com/boom"
                 ),
                 source_url_max_pages=10,
+                source_url_respect_robots=False,
             )
         ).iter_pages()
     )
@@ -596,6 +601,55 @@ def test_same_host_links_keeps_host_and_skips_assets() -> None:
     assert "https://ex.com/a" in links
     assert all("other.com" not in u for u in links)
     assert all(not u.endswith(".png") for u in links)
+
+
+def test_url_source_respects_robots_txt(monkeypatch) -> None:
+    pages = {
+        "https://ex.com/robots.txt": "User-agent: *\nDisallow: /secret\n",
+        "https://ex.com/ok": (
+            "<html><head><title>OK</title></head>"
+            "<body><p>Allowed page with enough body text for ingest here.</p></body></html>"
+        ),
+        "https://ex.com/secret": (
+            "<html><head><title>Secret</title></head>"
+            "<body><p>Should not be fetched when robots.txt disallows it.</p></body></html>"
+        ),
+    }
+
+    class _RespOK:
+        status_code = 200
+
+        def __init__(self, text, ctype="text/html"):
+            self.text = text
+            self.headers = {"content-type": ctype}
+
+    class _Client:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, url, follow_redirects=True):
+            body = pages[url]
+            ctype = "text/plain" if url.endswith("robots.txt") else "text/html"
+            return _RespOK(body, ctype)
+
+    monkeypatch.setattr(httpx, "Client", _Client)
+    docs = list(
+        UrlKBSource(
+            _settings(
+                source_urls="https://ex.com/ok,https://ex.com/secret",
+                source_url_max_pages=5,
+                source_url_follow_links=False,
+                source_url_respect_robots=True,
+            )
+        ).iter_pages()
+    )
+    assert [d.title for d in docs] == ["OK"]
 
 
 def test_url_source_follows_same_host_links(monkeypatch) -> None:
@@ -639,6 +693,7 @@ def test_url_source_follows_same_host_links(monkeypatch) -> None:
                 source_urls="https://ex.com/start",
                 source_url_max_pages=5,
                 source_url_follow_links=True,
+                source_url_respect_robots=False,
             )
         ).iter_pages()
     )
@@ -677,7 +732,11 @@ def test_url_source_reads_sitemap(monkeypatch) -> None:
     monkeypatch.setattr(httpx, "Client", _Client)
     docs = list(
         UrlKBSource(
-            _settings(source_sitemap="https://ex.com/sitemap.xml", source_url_max_pages=5)
+            _settings(
+                source_sitemap="https://ex.com/sitemap.xml",
+                source_url_max_pages=5,
+                source_url_respect_robots=False,
+            )
         ).iter_pages()
     )
     assert len(docs) == 1 and docs[0].title == "P"

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.4
+
+### Added
+- **URL crawl respects robots.txt** (`SOURCE_URL_RESPECT_ROBOTS`, default on).
+  Per-origin `/robots.txt` is fetched once per ingest; disallowed paths are skipped.
+
 ## 1.2.3
 
 ### Added

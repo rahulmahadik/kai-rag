@@ -14,6 +14,7 @@ from collections import deque
 from collections.abc import Iterable, Iterator
 from html.parser import HTMLParser
 from urllib.parse import urldefrag, urljoin, urlparse
+from urllib.robotparser import RobotFileParser
 
 import httpx
 
@@ -21,6 +22,8 @@ from kai.config import Settings
 from kai.interfaces import Doc
 
 logger = logging.getLogger("kai.urls")
+
+_DEFAULT_UA = "KAI-url-source/1.2 (+https://github.com/rahulmahadik/kai-rag)"
 
 _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
@@ -178,6 +181,36 @@ def same_host_links(base_url: str, html: str) -> list[str]:
     return out
 
 
+class _RobotsCache:
+    """Per-origin robots.txt cache for one crawl session."""
+
+    def __init__(self, client: httpx.Client, user_agent: str) -> None:
+        self._client = client
+        self._ua = user_agent
+        self._parsers: dict[str, RobotFileParser] = {}
+
+    def allowed(self, url: str) -> bool:
+        p = urlparse(url)
+        if p.scheme not in {"http", "https"} or not p.netloc:
+            return False
+        origin = f"{p.scheme}://{p.netloc.lower()}"
+        rp = self._parsers.get(origin)
+        if rp is None:
+            rp = RobotFileParser()
+            robots_url = origin + "/robots.txt"
+            try:
+                resp = self._client.get(robots_url, follow_redirects=True)
+                if resp.status_code == 200 and (resp.text or "").strip():
+                    rp.parse(resp.text.splitlines())
+                else:
+                    # Missing / empty robots.txt → allow everything.
+                    rp.parse([])
+            except httpx.HTTPError:
+                rp.parse([])
+            self._parsers[origin] = rp
+        return bool(rp.can_fetch(self._ua, url))
+
+
 class UrlKBSource:
     """Crawl configured seed URLs and/or a sitemap into Docs."""
 
@@ -194,10 +227,10 @@ class UrlKBSource:
         self._sitemap = sitemap
         self._max = int(getattr(settings, "source_url_max_pages", 0) or 0) or 100
         self._follow = bool(getattr(settings, "source_url_follow_links", True))
+        self._robots = bool(getattr(settings, "source_url_respect_robots", True))
         self._timeout = httpx.Timeout(30.0)
-        self._headers = {
-            "User-Agent": "KAI-url-source/1.2 (+https://github.com/rahulmahadik/kai-rag)"
-        }
+        self._ua = _DEFAULT_UA
+        self._headers = {"User-Agent": self._ua}
 
     def _fetch(self, client: httpx.Client, url: str) -> tuple[str, str, str] | None:
         """Return ``(title, body_text, raw)`` or None."""
@@ -228,13 +261,17 @@ class UrlKBSource:
         queue: deque[str] = deque(_normalize_url(u) or u for u in self._seeds)
         yielded = 0
         with httpx.Client(timeout=self._timeout, headers=self._headers) as client:
+            robots = _RobotsCache(client, self._ua) if self._robots else None
             if self._sitemap:
-                sm = self._fetch(client, self._sitemap)
-                if sm is not None:
-                    for u in _parse_sitemap(sm[1], self._sitemap):
-                        nu = _normalize_url(u) or u
-                        if nu not in queue:
-                            queue.append(nu)
+                if robots is not None and not robots.allowed(self._sitemap):
+                    logger.info("kai_url_robots_deny url=%s", self._sitemap)
+                else:
+                    sm = self._fetch(client, self._sitemap)
+                    if sm is not None:
+                        for u in _parse_sitemap(sm[1], self._sitemap):
+                            nu = _normalize_url(u) or u
+                            if nu not in queue:
+                                queue.append(nu)
             while queue:
                 if yielded >= self._max:
                     break
@@ -242,6 +279,9 @@ class UrlKBSource:
                 if not url or url in seen:
                     continue
                 seen.add(url)
+                if robots is not None and not robots.allowed(url):
+                    logger.info("kai_url_robots_deny url=%s", url)
+                    continue
                 got = self._fetch(client, url)
                 if got is None:
                     continue

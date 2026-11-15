@@ -24,6 +24,8 @@ SOURCE_URL_FOLLOW_LINKS=true    # follow same-host links from HTML (default)
 Seeds and sitemap entries start the crawl; with `SOURCE_URL_FOLLOW_LINKS`
 (default on) KAI also follows same-host `<a href>` links until
 `SOURCE_URL_MAX_PAGES` is hit. Binary assets and cross-host links are skipped.
+`SOURCE_URL_RESPECT_ROBOTS` (default on) fetches each origin's `/robots.txt`
+and skips disallowed paths.
 
 Then ingest as usual: `python run/setup.py ingest` (or `POST /ingest`).
 For periodic refresh, `python run/setup.py schedule-ingest` prints cron /
