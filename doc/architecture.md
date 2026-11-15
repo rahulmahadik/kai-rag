@@ -36,11 +36,13 @@ kai/                          # the Python package
 └── providers/                # swappable integrations behind Protocols
     ├── confluence_cloud.py   #   Confluence source (Cloud + Server/DC)
     ├── file_source.py        #   local files / PDF / Markdown / HTML
+    ├── url_source.py         #   URL / sitemap crawl (HTML + PDF, Basic auth)
     ├── embedding_openai.py   #   OpenAI-compatible embeddings
     ├── llm_openai.py         #   OpenAI-compatible LLM
     ├── reranker.py           #   cross-encoder reranker (+ noop)
     ├── vectorstore_pgvector.py  # Postgres/pgvector store
     ├── jira_cloud.py         #   Jira escalation tracker
+    ├── github_issues.py      #   GitHub Issues escalation tracker
     └── local_tracker.py      #   local fallback tracker
 
 frontend/                     # standalone web chat UI (one HTML file, no build step)
@@ -251,7 +253,7 @@ retrieved sources are recorded for whoever picks it up.
 | `LLMClient`   | OpenAI-compatible `/chat/completions`                      |
 | `VectorStore` | Postgres + pgvector (hybrid: dense + full-text, fused with RRF) |
 | Reranker      | cross-encoder via `sentence-transformers`                 |
-| `KBSource`    | Confluence (Cloud or public/anonymous), local files (PDF / md / txt / html), or both |
+| `KBSource`    | Confluence (Cloud or public/anonymous), local files (PDF / md / txt / html), URL/sitemap crawl, or any combination |
 | `Tracker`     | Jira Cloud REST v3; `LocalTracker` when unconfigured      |
 
 `build_providers` is real-only and **fails loudly** if a required value is blank.

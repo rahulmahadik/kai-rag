@@ -24,13 +24,12 @@ Common prereqs for all: the **KAI API running** (`python run/setup.py start`) an
 reachable at `KAI_API_URL` (default `http://127.0.0.1:8100`); a `.env`
 (`setup.py install` creates one from `.env.example` when missing).
 
-> **Access control (read before exposing a bot).** Today only **Webex** has a
-> per-user allowlist (`WEBEX_APPROVED_USERS` / `WEBEX_APPROVED_DOMAINS`). **Slack
-> and Teams answer anyone who can reach the bot** in the workspace/tenant, gate
-> them at the platform level (restrict the Slack app to a private channel; scope
-> the Teams app to specific users/teams in the Admin Center). The `KAI_API_KEY`
-> guards the HTTP API, not who may DM the bot. A shared per-user allowlist for
-> Slack/Teams is on the roadmap.
+> **Access control (read before exposing a bot).** Every platform has an allowlist:
+> `WEBEX_APPROVED_USERS` / `WEBEX_APPROVED_DOMAINS`, `SLACK_APPROVED_USERS`
+> (Slack user ids), and `TEAMS_APPROVED_USERS` (AAD object ids / UPNs). Blank =
+> anyone who can reach the bot. Still gate at the platform level when you can
+> (private Slack channel; Teams Admin Center app scopes). `KAI_API_KEY` guards
+> the HTTP API, not who may DM the bot.
 
 ---
 
@@ -109,6 +108,7 @@ Slack uses **two different tokens, created in two different places**, keep them 
    | `app_mentions:read` | Subscribe to `app_mention` so the bot **hears @mentions** in channels. |
    | `chat:write` | **Post replies** (and feedback acknowledgements) into channels and threads. |
    | `im:history` | Receive the `message.im` event so the bot **hears DMs** sent directly to it. |
+   | `files:read` | Download an attached file for `/ask-document` (ad-hoc Q&A). |
 
    > Earlier docs also listed `commands` and `im:read`, **skip both.** KAI has no slash-command handler, and the DM event (`message.im`) requires **`im:history`** (in the table above), **not** `im:read`.
 
@@ -127,6 +127,7 @@ Slack uses **two different tokens, created in two different places**, keep them 
    CHAT_PLATFORM=slack
    SLACK_BOT_TOKEN=xoxb-...                 # Bot User OAuth Token (from step 5)
    SLACK_APP_TOKEN=xapp-...                 # App-Level Token (from step 3)
+   # SLACK_APPROVED_USERS=U123,U456         # optional allowlist (blank = anyone)
    # SLACK_FEEDBACK_BUTTONS=true            # optional: 👍/👎/escalate buttons under answers (default true)
    ```
 
@@ -222,7 +223,7 @@ A bot in Azure can't be opened in Teams until you wrap it in an app package and 
 22. **Publish → Download the app package** to get the `.zip`.
 23. **Sideload it into Teams:** open Teams → **Apps** → **Manage your apps** → **Upload an app** → **Upload a custom app** → select the `.zip`.
 
-> **Custom app upload must be allowed by your tenant.** If you don't see **Upload a custom app**, a Teams admin must enable custom app uploads (Teams Admin Center → **Teams apps → Setup policies**). That's also where an admin scopes the app to specific users/teams, **Teams answers anyone who can reach the bot**, so gate it here.
+> **Custom app upload must be allowed by your tenant.** If you don't see **Upload a custom app**, a Teams admin must enable custom app uploads (Teams Admin Center → **Teams apps → Setup policies**). Prefer scoping the app there *and* setting `TEAMS_APPROVED_USERS` so only listed identities get answers.
 
 ### Test it
 

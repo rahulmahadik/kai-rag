@@ -3,11 +3,11 @@
 **Author:** Rahul Mahadik
 
 KAI is an enterprise knowledge assistant. It answers questions from your
-knowledge base (Confluence) with **grounded, cited answers**, and, critically,
-it **escalates instead of guessing** when it isn't confident, so it never hands a
-user a confident wrong answer. It runs fully on your own machine (local LLM,
-embeddings, reranker, and vector database), so your content stays on your
-infrastructure.
+knowledge base (Confluence, local files, and/or URL crawls) with **grounded,
+cited answers**, and, critically, it **escalates instead of guessing** when it
+isn't confident, so it never hands a user a confident wrong answer. It runs
+fully on your own machine (local LLM, embeddings, reranker, and vector
+database), so your content stays on your infrastructure.
 
 **What to expect** (validated by the golden question set in `eval/` and the
 automated test suite):
@@ -19,9 +19,11 @@ automated test suite):
 
 Run the accuracy gate against your own corpus with `python eval/run_eval.py`.
 
-You can use KAI three ways: a **web chat UI** (the separate `frontend/` app, open
-it in a browser), the **HTTP API** (`POST /ask`), or a **chat bot** in Webex/Slack
-(`@KAI <question>`). The chat-bot setup is in [integrations-setup.md](integrations-setup.md).
+You can use KAI four ways: a **web chat UI** (the separate `frontend/` app, open
+it in a browser), the **HTTP API** (`POST /ask`), or a **chat bot** in
+Webex / Slack / Teams (`@KAI <question>`). The chat-bot setup is in
+[integrations-setup.md](integrations-setup.md). Sources and space ACL:
+[sources.md](sources.md).
 
 ---
 
@@ -33,7 +35,7 @@ it in a browser), the **HTTP API** (`POST /ask`), or a **chat bot** in Webex/Sla
 | **PostgreSQL 14+ with the `pgvector` extension** | Local install is fine. `setup.py doctor` checks it. |
 | **[Ollama](https://ollama.com)** running locally | Serves the LLM + embeddings on `:11434`. |
 | Two Ollama models | `ollama pull qwen2.5:14b-instruct` and `ollama pull nomic-embed-text` |
-| _(optional)_ A Webex/Slack account | Only if you want the **chat bot**: not needed for the web UI or the HTTP API. |
+| _(optional)_ Webex / Slack / Teams | Only if you want a **chat bot**: not needed for the web UI or the HTTP API. |
 
 > The cross-encoder reranker model (~90 MB) downloads automatically the first time the
 > API starts (one-time): no manual step. It loads in a background thread, so `/health`

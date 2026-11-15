@@ -23,11 +23,11 @@ exposing it beyond `localhost`:
   `/admin/*` surface are hidden from anonymous callers.
 - **`CORS_ORIGINS`**, deny-by-default. Set it to your web UI's **exact** origin;
   never use `*` with an internet-exposed, unauthenticated API.
-- **Chat access control**, only **Webex** has a per-user allowlist
-  (`WEBEX_APPROVED_USERS` / `WEBEX_APPROVED_DOMAINS`). **Slack and Teams answer anyone**
-  who can reach the bot, restrict them at the platform level (private channel /
-  scoped Teams app). Teams refuses inbound requests entirely unless `TEAMS_APP_ID`
-  is configured.
+- **Chat access control**, every platform has an allowlist:
+  `WEBEX_APPROVED_USERS` / `WEBEX_APPROVED_DOMAINS`, `SLACK_APPROVED_USERS`,
+  `TEAMS_APPROVED_USERS`. Blank = anyone who can reach the bot (still restrict at
+  the platform when you can). Teams refuses inbound requests entirely unless
+  `TEAMS_APP_ID` is configured.
 - **Data egress**, escalation to an external tracker (Jira) sends the question (and,
   only if `ESCALATION_INCLUDE_DRAFT=true`, the unverified model draft). Review before
   enabling in residency-sensitive deployments.

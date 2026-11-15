@@ -19,9 +19,10 @@ provided as an alternative (`docker compose up` → API + Postgres + web UI).
 **Windows?** Use WSL or Docker, or run `uvicorn kai.app:app` directly, the
 `run/setup.py` helper assumes a Unix shell plus `psql`/`createdb`.
 
-**How do I load my own documents?** Set `SOURCE_TYPE` (`confluence`, `files`, or
-`confluence+files`) and `SOURCE_DIR`/`CONFLUENCE_*`, then `python run/setup.py ingest`
-(or `POST /ingest`). See [sources.md](sources.md).
+**How do I load my own documents?** Set `SOURCE_TYPE` (`confluence`, `files`,
+`urls`, or any `+` combination) plus `SOURCE_DIR` / `CONFLUENCE_*` /
+`SOURCE_URLS`/`SOURCE_SITEMAP`, then `python run/setup.py ingest` (or
+`POST /ingest`). See [sources.md](sources.md).
 
 **I added new docs, do I re-ingest everything?** No. `ingest` is **incremental**
 (unchanged docs are skipped). Use `reindex` only when you change the embedding model
@@ -36,7 +37,10 @@ inline comment.
 **The settings that matter most:**
 - `LLM_*` and `EMBED_*`, your model endpoints, keys, and model names.
 - `DATABASE_URL`, Postgres/pgvector connection.
-- `SOURCE_TYPE` / `SOURCE_DIR` / `CONFLUENCE_*`: where knowledge comes from.
+- `SOURCE_TYPE` / `SOURCE_DIR` / `CONFLUENCE_*` / `SOURCE_URLS`: where knowledge
+  comes from (URL crawl also has `SOURCE_URL_FOLLOW_LINKS`,
+  `SOURCE_URL_RESPECT_ROBOTS`, optional `SOURCE_URL_USER`/`SOURCE_URL_PASSWORD`).
+- `ASK_SPACES` / `ASK_SPACE_ACL`: optional per-space answer scoping.
 - `CONFIDENCE_THRESHOLD` (default `0.45`): the answer-vs-escalate gate (below).
 - `RERANKER` (`cross_encoder` in the shipped `.env.example`, `noop` in code default),
   `MULTI_QUERY`, `TOP_K`, retrieval quality knobs.
@@ -124,8 +128,8 @@ authorizes the bot; the **App-Level Token** (`xapp-...` → `SLACK_APP_TOKEN`, f
 Information → App-Level Tokens*) authorizes the Socket Mode connection
 (`connections:write`). KAI exits with a clear message if they're missing or swapped.
 
-**Slack: which scopes?** `app_mentions:read`, `chat:write`, `im:history` (for DMs).
-That's it, `commands`/`im:read` are **not** needed.
+**Slack: which scopes?** `app_mentions:read`, `chat:write`, `im:history` (for DMs),
+and `files:read` if you want attachment Q&A. `commands`/`im:read` are **not** needed.
 
 **Webex: why don't I see feedback buttons / a scopes screen?** Webex bots have **no
 scopes to choose** (fixed capability set). The 👍/👎 card is **opt-in**, set
@@ -138,10 +142,15 @@ same API.
 **Does the bot reply in-thread?** Yes, answers and feedback acks stay in the original
 thread, so several people can use the bot in one space without crossing wires.
 
-**Who can use the bot?** Today only **Webex** has a per-user allowlist
-(`WEBEX_APPROVED_USERS` / `WEBEX_APPROVED_DOMAINS`). Slack/Teams answer anyone who can
-reach the bot, gate them at the platform level. `KAI_API_KEY` guards the **HTTP API**,
-not who may DM the bot.
+**Who can use the bot?** Each platform has an allowlist: `WEBEX_APPROVED_USERS` /
+`WEBEX_APPROVED_DOMAINS`, `SLACK_APPROVED_USERS`, `TEAMS_APPROVED_USERS`. Blank =
+anyone who can reach the bot (still gate at the platform when you can).
+`KAI_API_KEY` guards the **HTTP API**, not who may DM the bot.
+
+**Can I restrict answers to certain Confluence spaces?** Yes. `ASK_SPACES` is a
+global allowlist of space/source tags; `ASK_SPACE_ACL` maps identities (email,
+user id, or `@domain`) to spaces and fails closed for unknown askers. Chat bots
+send the sender as `asker` automatically.
 
 ## Usage patterns (a few ideas, depending on how you use it)
 
@@ -151,7 +160,8 @@ not who may DM the bot.
 - **Studying / interview prep.** Load papers or a syllabus and quiz yourself; every
   answer is grounded and cited so you can verify it.
 - **"Just the relevant bit" of a big document.** Attach a long PDF/spec in the web UI
-  (📎) and ask one pointed question, read once, **not** saved to the corpus.
+  (📎) or in Webex/Slack/Teams and ask one pointed question, read once, **not**
+  saved to the corpus.
 - **Curated team knowledge.** Use the Inform loop to capture approved answers to things
   that aren't written down anywhere yet.
 

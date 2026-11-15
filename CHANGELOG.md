@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.6
+
+### Docs
+- Public docs catch up to shipped 1.2.x behaviour: Slack/Teams file attach +
+  allowlists, URL crawl (robots, Basic auth, PDF), `/notify`, `ASK_SPACES` /
+  `ASK_SPACE_ACL`, and the architecture/source tree. Removed stale "on the
+  roadmap" wording that contradicted the code.
+
 ## 1.2.5
 
 ### Added

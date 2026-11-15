@@ -22,8 +22,8 @@ surface is a thin client that POSTs to **`/ask`**:
 ```
             ┌─ web UI (frontend/) ─┐
 user types ─┼─ Webex bot ──────────┼─►  POST /ask  ─►  retrieve (hybrid: vector + keyword)
-            └─ Slack bot ──────────┘                    └► rerank (cross-encoder)
-                                                          └► confidence gate ──┐
+            ├─ Slack bot ──────────┤                    └► rerank (cross-encoder)
+            └─ Teams bot ──────────┘                      └► confidence gate ──┐
                                                                                ├─ confident → grounded answer
                                                           grounding + verify ──┤   + citations
                                                           + numeric guards     └─ not sure → ESCALATE
@@ -34,29 +34,29 @@ user types ─┼─ Webex bot ──────────┼─►  POST /as
 - The **web UI** calls `/ask` over CORS and renders the answer, sources, confidence,
   and an answered/escalated pill. Optional body fields: `spaces` (narrow retrieval
   to those space tags) and `asker` (identity for `ASK_SPACE_ACL`).
-- The **Webex/Slack bots** (`kai/chat/`, run as separate processes) post the user's
-  message to `/ask`, then post the reply back, Webex edits its "searching..." message
-  in place. See [chat-platforms.md](chat-platforms.md) and
+- The **Webex / Slack / Teams bots** (`kai/chat/`, run as separate processes) post the
+  user's message to `/ask` (with `asker` set), then post the reply back; Webex edits
+  its "searching..." message in place. See [chat-platforms.md](chat-platforms.md) and
   [integrations-setup.md](integrations-setup.md).
 - Same brain for all of them: one `/ask`, one pipeline, one never-fabricate guarantee.
 
 ### Which endpoint the bot calls
 
-The **user never picks an endpoint**. It's routed by what's *in* the message. The
-**Webex & Slack bots** share one `ChatService` (`kai/chat/service.py`); the **web UI**
-calls `/ask` directly from the browser (text only):
+The **user never picks an endpoint**. It's routed by what's *in* the message. All
+three bots share one `ChatService` (`kai/chat/service.py`); the **web UI** calls
+`/ask` (and `/ask-document` via 📎) from the browser:
 
-| What the user does | Endpoint called | Webex | Slack | Web UI |
-| --- | --- | :-: | :-: | :-: |
-| Sends a question (text / @mention) | `POST /ask` | ✅ | ✅ | ✅ |
-| Question **with a file attached** | `POST /ask-document` (ad-hoc RAG) | ✅ |, | ✅ |
-| Taps 👍 / 👎 on the answer card | `POST /feedback` | ✅ | ✅ |, |
-| Taps **Escalate** on the card | `POST /escalate` | ✅ | ✅ |, |
+| What the user does | Endpoint called | Webex | Slack | Teams | Web UI |
+| --- | --- | :-: | :-: | :-: | :-: |
+| Sends a question (text / @mention) | `POST /ask` | ✅ | ✅ | ✅ | ✅ |
+| Question **with a file attached** | `POST /ask-document` | ✅ | ✅ | ✅ | ✅ |
+| Taps 👍 / 👎 on the answer card | `POST /feedback` | ✅ | ✅ | ✅ | — |
+| Taps **Escalate** on the card | `POST /escalate` | ✅ | ✅ | ✅ | — |
 
-File-attachment Q&A works on **Webex** (drop a file + @mention) and the **web UI**
-(the 📎 button), both route to `/ask-document`, which answers from that file only and
-never stores it. **Slack/Teams have no inbound-file handling yet**: a file there is
-ignored and only the text is answered. The web UI has no feedback card (👍/👎) yet.
+File-attachment Q&A works on **Webex, Slack, Teams**, and the **web UI** (📎): each
+routes to `/ask-document`, which answers from that file only and never stores it.
+Slack needs the `files:read` bot scope; Teams downloads via `contentUrl` when the
+activity carries it. The web UI has no feedback card (👍/👎) yet.
 `/ingest`, `/admin/*`, and `/notify` are operator/outbound actions: never triggered
 by a user message. Typing **`help`** (or `?`, `what can you do`) in any chat surface
 shows a capabilities message instead of being answered as a question.
@@ -77,7 +77,7 @@ shows a capabilities message instead of being answered as a question.
 
 | Method & path | Auth | Purpose |
 | --- | --- | --- |
-| `POST /ingest` | ✅ | (Re)ingest the configured sources (Confluence instances + file dirs). Incremental, unchanged docs are skipped. Returns `{ingested}` (chunk count). |
+| `POST /ingest` | ✅ | (Re)ingest the configured sources (Confluence, file dirs, and/or URL crawl). Incremental, unchanged docs are skipped. Returns `{ingested}` (chunk count). |
 | `POST /admin/reindex` | ✅ | Rebuild the vector index **in place** (re-embed every source + re-index approved curated answers), keeping the Inform queue / feedback / telemetry. Use after changing the embedding model/chunking. Returns `{chunks, curated}`. (A dimension change is refused, use `reset-db`.) |
 
 ### Health & observability

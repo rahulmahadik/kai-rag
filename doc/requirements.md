@@ -195,8 +195,10 @@ When a human answers an escalated/gap question well, that validated Q&A becomes 
 **Built (v1.2):** Confluence (multi-space, multi-instance, Cloud + Server/DC), local files, and URL/sitemap sources; `/ask` + `/ask-document` + `/search` + feedback/escalate + `/notify` + `/admin/*`; hybrid retrieval (dense + full-text, RRF) + cross-encoder rerank + confidence gate + grounding/verification guards; Jira or GitHub Issues escalation (local fallback); the Inform learn-back loop (approval-gated, 4-eyes optional, 👎 quarantine, `frontend/admin.html`); web UI + Webex/Slack/Teams bots (allowlists + file attach); model-agnostic via config.
 
 **Future scope (not built):**
-- **More sources** behind `KBSource`: a web/URL crawler (the general path for non-Confluence wikis like MediaWiki/DokuWiki), SharePoint, Google Drive, Git repos/wikis.
-- **More trackers** behind `Tracker`: GitHub/GitLab issues, ServiceNow, Linear, plain email; richer paging/routing.
+- **More sources** behind `KBSource`: SharePoint, Google Drive, Git repos/wikis
+  (URL/sitemap crawl with Basic auth + PDF extraction already ships).
+- **More trackers** behind `Tracker`: GitLab issues, ServiceNow, Linear, plain
+  email; richer paging/routing. (GitHub Issues already ships alongside Jira.)
 - **Enterprise hardening:** SSO, RBAC, multi-tenant isolation, per-user OAuth for Atlassian/Webex, job queues + retry/backoff, vector-store clustering, eval in CI.
 - **Heavier RAG frameworks, only if the need arises:** LlamaIndex (multi-hop, many connectors), Haystack (typed/observable pipelines), or **LangChain / LangGraph** when KAI must become a tool-calling **agent** (see §5.3). KAI is deliberately framework-free today: a small, owned `retrieve → rerank → prompt → answer` pipeline, for the fewest dependencies and zero hidden prompt mutation.
 

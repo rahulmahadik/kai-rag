@@ -110,9 +110,9 @@ the sender as `asker` on `/ask`. Clients may also pass `spaces` to narrow
 further (never expand past the allowlist).
 
 > Any wiki/site that speaks the **Confluence REST API** works as an instance
-> (Cloud or Server/DC). Non-Confluence wikis (MediaWiki, generic doc sites) need a
-> different connector, see [the extension point](#adding-another-source-type) or
-> the web-source item on the [roadmap](roadmap.md).
+> (Cloud or Server/DC). For generic doc sites, use `SOURCE_TYPE=urls` (HTML + PDF
+> crawl). Other wikis without a Confluence API (MediaWiki, etc.) need a custom
+> connector, see [the extension point](#adding-another-source-type).
 
 ## Files source
 

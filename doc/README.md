@@ -7,7 +7,7 @@
 | [deploy.md](deploy.md) | Docker Compose or systemd, provider matrix, prod checklist |
 | [integrations-setup.md](integrations-setup.md) | Webex, Slack, and Teams: create the bot, tokens, run |
 | [chat-platforms.md](chat-platforms.md) | Chat-adapter architecture and adding a platform |
-| [sources.md](sources.md) | Confluence and local files/PDF; `SOURCE_TYPE`, `VECTOR_TYPE` |
+| [sources.md](sources.md) | Confluence, local files/PDF, URL crawl; `SOURCE_TYPE`, space ACL |
 | [architecture.md](architecture.md) | Pipeline, guards, providers |
 | [faq.md](faq.md) | Setup, config, accuracy, bots, gotchas |
 | [roadmap.md](roadmap.md) | Done and planned |

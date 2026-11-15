@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)
 [![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-![Version 1.2.5](https://img.shields.io/badge/version-1.2.5-success.svg)
+![Version 1.2.6](https://img.shields.io/badge/version-1.2.6-success.svg)
 
 > ### Ask your docs. Get a cited answer, or an honest "I don't know."
 
@@ -15,10 +15,11 @@ documentation. Every confident answer is drawn from, and cites, your own
 documents. When those documents do not support an answer, KAI escalates to a
 human instead of inventing one.
 
-It indexes Confluence spaces, PDFs, and text/markdown files into Postgres with
-pgvector, and talks to any OpenAI-compatible LLM and embedding endpoint (Ollama,
-vLLM, llama.cpp, or a hosted API). A web chat UI, HTTP API, and Webex, Slack,
-and Teams bots share the same answer path.
+It indexes Confluence spaces, local files (PDF / Markdown / HTML), and URL /
+sitemap crawls (same-host links, robots.txt, optional HTTP Basic, PDF pages)
+into Postgres with pgvector, and talks to any OpenAI-compatible LLM and
+embedding endpoint (Ollama, vLLM, llama.cpp, or a hosted API). A web chat UI,
+HTTP API, and Webex, Slack, and Teams bots share the same answer path.
 
 ```
 question -> retrieve (hybrid: vector + full-text, RRF) -> rerank -> confidence gate
@@ -79,20 +80,22 @@ CHAT_PLATFORM=webex python run/setup.py bot      # or: slack | teams
 ```
 
 Setup guides: [doc/integrations-setup.md](doc/integrations-setup.md). Attach a
-file on Webex or the web UI for one-shot Q&A over that file only; it is never
-stored in the knowledge base.
+file on Webex, Slack, Teams, or the web UI for one-shot Q&A over that file only;
+it is never stored in the knowledge base. Optional allowlists:
+`WEBEX_APPROVED_*`, `SLACK_APPROVED_USERS`, `TEAMS_APPROVED_USERS`.
 
 ## HTTP API
 
 | Method and path | Purpose |
 | --- | --- |
 | `GET /health` | liveness |
-| `POST /ask` | answer with citations, or escalate |
+| `POST /ask` | answer with citations, or escalate (`spaces` / `asker` optional) |
 | `POST /ask-document` | ad-hoc Q&A over an uploaded file |
 | `POST /ingest` | incremental (re)build of the index |
 | `POST /admin/reindex` | rebuild vectors in place |
 | `POST /search` | retrieve-only ranked chunks |
 | `POST /feedback`, `/escalate` | thumbs and human escalation |
+| `POST /notify` | proactive DM on the active chat platform |
 | `GET /metrics`, `/admin/gaps` | observability |
 | `POST /admin/inform[...]` | curate learned answers |
 
@@ -106,7 +109,7 @@ Set `KAI_API_KEY` before exposing the API beyond localhost. Full reference:
 - [doc/setup-and-run.md](doc/setup-and-run.md) — install and run in depth
 - [doc/deploy.md](doc/deploy.md) — Docker Compose, systemd, provider matrix
 - [doc/integrations-setup.md](doc/integrations-setup.md) — Webex, Slack, Teams
-- [doc/sources.md](doc/sources.md) — Confluence and files
+- [doc/sources.md](doc/sources.md) — Confluence, files, and URL crawl
 - [doc/architecture.md](doc/architecture.md) — pipeline and providers
 - [doc/roadmap.md](doc/roadmap.md) — done and planned
 - [CHANGELOG.md](CHANGELOG.md) · [CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md)

@@ -168,12 +168,15 @@ KAI answers only from what it has ingested. After the service is up:
 curl -X POST http://localhost:8100/ingest
 ```
 
-Configure sources in `.env`:
+Configure sources in `.env` (`SOURCE_TYPE` = `confluence`, `files`, `urls`, or
+any `+` combination):
 - **Confluence**, `CONFLUENCE_BASE_URL`, `CONFLUENCE_SPACE_KEY` (comma-separated
   for multiple spaces), token.
 - **Local files / PDFs**, `SOURCE_DIR`. The bundled `samples/` are excluded from
   the Docker image (see `.dockerignore`), so under Compose mount your own
   directory and point `SOURCE_DIR` at the mount path.
+- **URL / sitemap crawl**, `SOURCE_URLS` / `SOURCE_SITEMAP` (optional
+  `SOURCE_URL_USER` / `SOURCE_URL_PASSWORD` for HTTP Basic).
 
 Re-running `/ingest` is incremental (unchanged docs are skipped via a content
 hash), so it's safe to schedule on a cron / timer to keep the index fresh.
