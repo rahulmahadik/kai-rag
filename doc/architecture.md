@@ -43,6 +43,7 @@ kai/                          # the Python package
     ├── vectorstore_pgvector.py  # Postgres/pgvector store
     ├── jira_cloud.py         #   Jira escalation tracker
     ├── github_issues.py      #   GitHub Issues escalation tracker
+    ├── email_tracker.py      #   SMTP email escalation tracker
     └── local_tracker.py      #   local fallback tracker
 
 frontend/                     # standalone web chat UI (one HTML file, no build step)
@@ -237,11 +238,9 @@ After generation, several guards run:
 ## 6. Escalation
 
 When KAI cannot answer confidently, `Tracker.create_issue` records the
-escalation. With Jira configured, it opens a real ticket (description rendered as
-Atlassian Document Format) and the answer links to it. With no tracker
-configured, `LocalTracker` logs the escalation and the user sees a "flagged for a
-human to review" message with **no** link, honest, no fake URL. The closest
-retrieved sources are recorded for whoever picks it up.
+escalation. Preference: **Jira** (ADF ticket URL) → **GitHub Issues** → **SMTP
+email** (`mailto:` contact link) → **LocalTracker** (log only, no fake URL). The
+closest retrieved sources are recorded for whoever picks it up.
 
 ---
 
@@ -254,7 +253,7 @@ retrieved sources are recorded for whoever picks it up.
 | `VectorStore` | Postgres + pgvector (hybrid: dense + full-text, fused with RRF) |
 | Reranker      | cross-encoder via `sentence-transformers`                 |
 | `KBSource`    | Confluence (Cloud or public/anonymous), local files (PDF / md / txt / html), URL/sitemap crawl, or any combination |
-| `Tracker`     | Jira Cloud REST v3; `LocalTracker` when unconfigured      |
+| `Tracker`     | Jira Cloud, GitHub Issues, SMTP email, or `LocalTracker`  |
 
 `build_providers` is real-only and **fails loudly** if a required value is blank.
 Adding a new knowledge source (SharePoint, Notion, a folder of docs, a website)

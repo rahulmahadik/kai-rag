@@ -111,8 +111,7 @@ class Settings(BaseSettings):
     confluence_root_page: str = ""
 
     # ------------------------------------------------------------------
-    # Escalation tracker: Jira Cloud and/or GitHub Issues.
-    # Preference when both are fully configured: Jira. Neither → local log only.
+    # Escalation tracker: Jira → GitHub Issues → email (SMTP) → local log.
     # ------------------------------------------------------------------
     jira_base_url: str = ""  # https://you.atlassian.net, blank disables Jira tickets
     jira_email: str = ""  # account email for Jira Basic auth
@@ -122,6 +121,15 @@ class Settings(BaseSettings):
     github_token: str = ""  # classic or fine-grained PAT with issues:write
     github_repo: str = ""  # owner/name, e.g. "acme/runbooks"
     github_api_url: str = "https://api.github.com"  # override for GitHub Enterprise
+    # Plain email when Jira/GitHub are unset. Needs TO + FROM + SMTP host.
+    escalation_email_to: str = ""  # comma-separated recipients
+    escalation_email_from: str = ""  # From: address
+    escalation_smtp_host: str = ""  # e.g. smtp.example.com
+    escalation_smtp_port: int = 587
+    escalation_smtp_user: str = ""  # blank = no SMTP AUTH
+    escalation_smtp_password: str = ""
+    escalation_smtp_tls: bool = True  # STARTTLS (typical on 587)
+    escalation_smtp_ssl: bool = False  # implicit SSL (typical on 465)
     # Data-egress boundary: when escalating to an EXTERNAL tracker, the
     # ticket body always carries the question + closest sources; the MODEL DRAFT
     # (unverified generated text) is included only when this is on. Default OFF,

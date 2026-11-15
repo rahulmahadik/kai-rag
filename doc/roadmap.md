@@ -18,9 +18,10 @@ today. This page records what ships now and what's planned next. Contributions w
   Inform review page (`admin.html`), the HTTP API, and Webex + Slack + Teams
   bots (Teams: verify in your Azure tenant). Allowlists and file attachments on
   all three platforms.
-- **Escalation**, opens a **Jira** or **GitHub Issues** ticket on low-confidence
-  questions, and can **proactively DM** on Webex, Slack, or Teams (`/notify`;
-  Teams uses a stored conversation reference after the user messages the bot).
+- **Escalation**, opens a **Jira** or **GitHub Issues** ticket, or sends **SMTP
+  email**, on low-confidence questions, and can **proactively DM** on Webex,
+  Slack, or Teams (`/notify`; Teams uses a stored conversation reference after
+  the user messages the bot).
 - **Learning loop**, approval-gated curated answers (API + `frontend/admin.html`),
   with an audit trail and 👎-driven auto-removal; observability via `/metrics`
   and `/admin/gaps`.
@@ -42,10 +43,13 @@ today. This page records what ships now and what's planned next. Contributions w
 > `SOURCE_URL_RESPECT_ROBOTS`, `SOURCE_URL_USER` / `SOURCE_URL_PASSWORD`).
 
 ### Escalation & notifications, *raise a ticket / page a person*
-- Trackers beyond Jira/GitHub: ServiceNow, Linear, GitLab, or plain email.
+- Trackers beyond Jira/GitHub/email: ServiceNow, Linear, GitLab.
 - Topic/space-based notify routing with acknowledgement; richer Teams
   conversation creation (open a fresh 1:1 when only a channel ref exists).
 - Escalation templates and auto-assignment by subject area.
+
+> **Shipped:** Jira, GitHub Issues, and plain SMTP email escalation
+> (`ESCALATION_EMAIL_TO` / `ESCALATION_SMTP_*`).
 
 ### Answering & UX
 - Richer ACL (group/role sync from IdP); per-source tags beyond Confluence space.

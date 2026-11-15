@@ -286,6 +286,90 @@ def test_the_local_tracker_files_nothing_and_returns_no_url() -> None:
     assert LocalTracker().create_issue("title", "body") == ""
 
 
+def test_factory_picks_email_when_jira_and_github_absent() -> None:
+    from kai.providers.email_tracker import EmailTracker
+
+    providers = build_providers(
+        _wiring_settings(
+            escalation_email_to="ops@acme.com",
+            escalation_email_from="kai@acme.com",
+            escalation_smtp_host="smtp.acme.com",
+        )
+    )
+    assert isinstance(providers[4], EmailTracker)
+
+
+def test_partial_email_config_falls_back_to_local() -> None:
+    providers = build_providers(
+        _wiring_settings(
+            escalation_email_to="ops@acme.com",
+            escalation_email_from="kai@acme.com",
+            # host missing
+        )
+    )
+    assert isinstance(providers[4], LocalTracker)
+
+
+def test_email_tracker_sends_via_smtp(monkeypatch) -> None:
+    from kai.providers.email_tracker import EmailTracker
+
+    sent: dict = {}
+
+    class _SMTP:
+        def __init__(self, host, port, timeout=30):
+            sent["host"] = host
+            sent["port"] = port
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def ehlo(self):
+            pass
+
+        def starttls(self, context=None):
+            sent["tls"] = True
+
+        def login(self, user, password):
+            sent["user"] = user
+            sent["password"] = password
+
+        def send_message(self, msg):
+            sent["subject"] = msg["Subject"]
+            sent["to"] = msg["To"]
+            sent["from"] = msg["From"]
+            sent["body"] = msg.get_content()
+
+    monkeypatch.setattr("kai.providers.email_tracker.smtplib.SMTP", _SMTP)
+    tracker = EmailTracker(
+        _wiring_settings(
+            escalation_email_to="ops@acme.com, oncall@acme.com",
+            escalation_email_from="kai@acme.com",
+            escalation_smtp_host="smtp.acme.com",
+            escalation_smtp_port=587,
+            escalation_smtp_user="kai",
+            escalation_smtp_password="secret",
+            escalation_smtp_tls=True,
+        )
+    )
+    url = tracker.create_issue("KAI could not answer: how?", "body text here")
+    assert sent["host"] == "smtp.acme.com"
+    assert sent["tls"] is True
+    assert sent["user"] == "kai"
+    assert "ops@acme.com" in sent["to"]
+    assert sent["from"] == "kai@acme.com"
+    assert url.startswith("mailto:ops@acme.com?subject=")
+
+
+def test_email_tracker_needs_to_from_host() -> None:
+    from kai.providers.email_tracker import EmailTracker
+
+    with pytest.raises(ValueError, match="ESCALATION_EMAIL"):
+        EmailTracker(_wiring_settings())
+
+
 # ======================================================================= #
 # bot.run_bot
 # ======================================================================= #

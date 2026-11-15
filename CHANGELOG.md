@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.7
+
+### Added
+- **Email (SMTP) escalation.** When Jira and GitHub Issues are unset,
+  `ESCALATION_EMAIL_TO` / `FROM` / `ESCALATION_SMTP_*` send the escalation over
+  SMTP and return a `mailto:` contact link. Preference: Jira → GitHub → email →
+  local log.
+
 ## 1.2.6
 
 ### Docs

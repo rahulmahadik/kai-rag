@@ -263,7 +263,7 @@ def build_providers(settings: Settings) -> Providers:
 
     kb: KBSource = _build_kb(settings)
 
-    # Escalation tracker preference: Jira → GitHub Issues → local log-only.
+    # Escalation tracker preference: Jira → GitHub Issues → email → local log.
     if _set(
         settings.jira_base_url,
         settings.jira_email,
@@ -280,6 +280,14 @@ def build_providers(settings: Settings) -> Providers:
         from kai.providers.github_issues import GitHubIssuesTracker
 
         tracker = GitHubIssuesTracker(settings)
+    elif _set(
+        getattr(settings, "escalation_email_to", ""),
+        getattr(settings, "escalation_email_from", ""),
+        getattr(settings, "escalation_smtp_host", ""),
+    ):
+        from kai.providers.email_tracker import EmailTracker
+
+        tracker = EmailTracker(settings)
     else:
         from kai.providers.local_tracker import LocalTracker
 

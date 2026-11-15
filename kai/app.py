@@ -271,7 +271,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="KAI, Know · Ask · Inform",
         description=_description,
-        version="1.2.6",
+        version="1.2.7",
         openapi_tags=_tags_meta,
         contact={"name": "Rahul Mahadik", "url": "https://rahulmahadik.com"},
         license_info={
@@ -551,7 +551,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post(
         "/notify",
         tags=["Feedback & escalation"],
-        summary="Proactively DM a user (Webex or Slack; see CHAT_PLATFORM)",
+        summary="Proactively DM a user (Webex, Slack, or Teams; see CHAT_PLATFORM)",
         dependencies=[Depends(_require_api_key)],
     )
     def notify(req: NotifyRequest) -> dict:
@@ -559,7 +559,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         Closes the loop when an escalation is answered. Webex needs an email and
         ``WEBEX_BOT_TOKEN``; Slack needs a user id (or email) and ``SLACK_BOT_TOKEN``.
-        Teams cold-DM is not supported.
+        Teams needs app creds and a stored conversation reference (user must have
+        messaged the bot once).
         """
 
         from kai.chat.notify import notify_user

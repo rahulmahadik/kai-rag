@@ -1,9 +1,9 @@
-"""Escalation tracker fallback for when no external tracker (Jira) is wired.
+"""Escalation tracker fallback when no external tracker is wired.
 
 Records the escalation in the logs and returns **no** ticket URL, honest
-behaviour (no fake link) for a deployment that hasn't connected an issue tracker
-yet. The answer pipeline shows a "flagged for a human" message without a URL in
-this case. Configure Jira (JIRA_* in .env) to open real tickets instead.
+behaviour (no fake link) for a deployment that hasn't connected Jira, GitHub
+Issues, or email SMTP yet. The answer pipeline shows a "flagged for a human"
+message without a URL in this case.
 """
 
 from __future__ import annotations

@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)
 [![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-![Version 1.2.6](https://img.shields.io/badge/version-1.2.6-success.svg)
+![Version 1.2.7](https://img.shields.io/badge/version-1.2.7-success.svg)
 
 > ### Ask your docs. Get a cited answer, or an honest "I don't know."
 
@@ -129,10 +129,11 @@ gate is `python eval/run_eval.py`.
 
 ## Limitations
 
-- Access control is per-platform today (Webex allowlist; Slack/Teams are gated at
-  the workspace or tenant).
-- Sources are Confluence and local files; more connectors are planned.
-- Escalation tracker is Jira, plus a local fallback.
+- Access control is per-platform allowlists (`WEBEX_APPROVED_*`,
+  `SLACK_APPROVED_USERS`, `TEAMS_APPROVED_USERS`); IdP group sync is planned.
+- Sources are Confluence, local files, and URL/sitemap crawl; more connectors
+  (SharePoint, Drive, Git) are planned.
+- Escalation trackers are Jira, GitHub Issues, or SMTP email (else local log).
 - No token streaming: grounding runs after generation, so the UI uses an
   edit-in-place acknowledgement instead.
 - Tuned for small-to-medium corpora; quality depends on your LLM and embeddings.

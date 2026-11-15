@@ -89,6 +89,11 @@ be curated into the knowledge base (with an audit trail and 👎-driven auto-rem
 **Is escalation an error?** No. It's the product working. "I couldn't answer this
 confidently... flagged it for a human" is the never-fabricate guarantee, not a failure.
 
+**Where do escalations go?** Configure one tracker in `.env` (preference order):
+**Jira** (`JIRA_*`), **GitHub Issues** (`GITHUB_TOKEN` + `GITHUB_REPO`), or
+**email** (`ESCALATION_EMAIL_TO` / `FROM` + `ESCALATION_SMTP_*`). With none set,
+KAI only logs the escalation locally (no fake ticket link).
+
 **How do I tune accuracy?** A few levers, roughly in order of impact:
 
 1. **Make the content retrievable first.** Confirm the doc is ingested, and use
