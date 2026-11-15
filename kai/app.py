@@ -64,9 +64,17 @@ def _prewarm_reranker(settings: Settings) -> None:
 
 
 class AskRequest(BaseModel):
-    """Body for ``POST /ask``."""
+    """Body for ``POST /ask`` and ``POST /search``."""
 
     question: str = Field(..., min_length=1, max_length=2000, description="The user's question.")
+    # Optional space scoping: Confluence space keys, ``url``, ``kai-curated``, etc.
+    # Intersected with ASK_SPACES / ASK_SPACE_ACL when those are set (never expands).
+    spaces: list[str] | None = Field(default=None, max_length=50)
+    asker: str = Field(
+        default="",
+        max_length=320,
+        description="Caller identity for ASK_SPACE_ACL (email or chat user id).",
+    )
 
     @field_validator("question")
     @classmethod
@@ -77,6 +85,14 @@ class AskRequest(BaseModel):
         if not v or not v.strip():
             raise ValueError("question must not be blank")
         return v
+
+    @field_validator("spaces")
+    @classmethod
+    def _clean_spaces(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return None
+        cleaned = [s.strip() for s in v if (s or "").strip()]
+        return cleaned or None
 
 
 class IngestResponse(BaseModel):
@@ -210,8 +226,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         with _cache_lock:
             answer_cache.clear()
 
-    def _cache_key(q: str) -> str:
-        return " ".join(q.lower().split())
+    def _cache_key(q: str, spaces: list[str] | None = None, asker: str = "") -> str:
+        # Scope must be part of the key or a broader answer could leak to a
+        # narrower asker (and vice versa) via the exact-match cache.
+        norm_q = " ".join(q.lower().split())
+        scope = ",".join(sorted(s.lower() for s in (spaces or [])))
+        who = (asker or "").strip().lower()
+        return f"{norm_q}|{scope}|{who}"
 
     # Hide interactive docs + schema once an API key is set (production posture) so
     # anonymous scanners can't enumerate the /admin/* surface via /openapi.json;
@@ -250,7 +271,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="KAI, Know · Ask · Inform",
         description=_description,
-        version="1.2.2",
+        version="1.2.3",
         openapi_tags=_tags_meta,
         contact={"name": "Rahul Mahadik", "url": "https://rahulmahadik.com"},
         license_info={
@@ -367,7 +388,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         dependencies=[Depends(_require_api_key)],
     )
     def ask(req: AskRequest) -> dict:
-        key = _cache_key(req.question)
+        key = _cache_key(req.question, req.spaces, req.asker)
         cached = None
         if cache_size:
             with _cache_lock:  # the cache touch is locked; telemetry/return aren't
@@ -379,7 +400,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return cached
 
         start = time.monotonic()
-        answer = ask_pipeline(req.question, providers, settings)
+        answer = ask_pipeline(req.question, providers, settings, spaces=req.spaces, asker=req.asker)
         duration_ms = int((time.monotonic() - start) * 1000)
         # one structured event per ask. This is what makes the confidence
         # gate measurable in production (escalation rate, calibration, latency).
@@ -789,7 +810,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         from kai.pipeline.ask import _confidence, retrieve
 
         embedder, llm, store, _kb, _tracker = providers
-        q, scored = retrieve(req.question, embedder, llm, store, settings)
+        q, scored = retrieve(
+            req.question,
+            embedder,
+            llm,
+            store,
+            settings,
+            spaces=req.spaces,
+            asker=req.asker,
+        )
         confidence = _confidence(
             q,
             scored,

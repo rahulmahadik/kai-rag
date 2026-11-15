@@ -310,7 +310,14 @@ def _normalize_query(question: str) -> str:
     return q.strip() or question.strip()
 
 
-def ask(question: str, providers: tuple, settings: Settings) -> Answer:
+def ask(
+    question: str,
+    providers: tuple,
+    settings: Settings,
+    *,
+    spaces: list[str] | None = None,
+    asker: str = "",
+) -> Answer:
     """Answer ``question`` end to end, escalating when KAI is not confident.
 
     ``providers`` is the 5-tuple from :func:`kai.factory.build_providers`
@@ -318,7 +325,16 @@ def ask(question: str, providers: tuple, settings: Settings) -> Answer:
     """
 
     embedder, llm, store, _kb, tracker = providers
-    return answer_question(question, embedder, llm, store, tracker, settings)
+    return answer_question(
+        question,
+        embedder,
+        llm,
+        store,
+        tracker,
+        settings,
+        spaces=spaces,
+        asker=asker,
+    )
 
 
 def answer_question(
@@ -328,6 +344,9 @@ def answer_question(
     store: VectorStore,
     tracker: Tracker,
     settings: Settings,
+    *,
+    spaces: list[str] | None = None,
+    asker: str = "",
 ) -> Answer:
     """Explicit-provider variant of :func:`ask` (typed, no tuple unpacking)."""
 
@@ -338,7 +357,9 @@ def answer_question(
     # 1-3. Retrieve: (optionally) rewrite + multi-query expand, retrieve a candidate
     #      pool per query, union, rerank against the original question, keep top_k.
     #      Shared with /search so the eval path matches production exactly.
-    question, scored = retrieve(question, embedder, llm, store, settings)
+    question, scored = retrieve(
+        question, embedder, llm, store, settings, spaces=spaces, asker=asker
+    )
     return _answer_from_retrieval(question, scored, embedder, llm, tracker, settings)
 
 
@@ -583,6 +604,9 @@ def retrieve(
     llm: LLMClient,
     store: VectorStore,
     settings: Settings,
+    *,
+    spaces: list[str] | None = None,
+    asker: str = "",
 ) -> tuple[str, list[ScoredChunk]]:
     """Run the full retrieval stage and return ``(effective_question, scored)``.
 
@@ -596,7 +620,14 @@ def retrieve(
     ``/ask`` (same multi-query + rerank), instead of a weaker single-query path.
     """
 
+    from kai.pipeline.scope import resolve_spaces, search_filters
+
     question = (question or "").strip()
+    space_filter = resolve_spaces(settings, requested=spaces, identity=asker)
+    filters = search_filters(space_filter)
+    if space_filter is not None and len(space_filter) == 0:
+        # Identity denied every space: skip embed/search and escalate upstream.
+        return question, []
 
     # 0. Optionally normalise messy input (fix spelling/grammar, meaning kept).
     if getattr(settings, "query_rewrite", False):
@@ -630,7 +661,7 @@ def retrieve(
     seen_ids: set[str] = set()
     candidates: list[ScoredChunk] = []
     for q, qvec in zip(queries, qvecs, strict=True):
-        for sc in store.search(query_vector=qvec, query_text=q, top_k=n_retrieve):
+        for sc in store.search(query_vector=qvec, query_text=q, top_k=n_retrieve, filters=filters):
             if sc.chunk.id not in seen_ids:
                 seen_ids.add(sc.chunk.id)
                 candidates.append(sc)

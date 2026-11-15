@@ -116,7 +116,7 @@ def ctx(monkeypatch):
         "build_providers",
         lambda *_a, **_k: (object(), object(), store, object(), tracker),
     )
-    monkeypatch.setattr(app_module, "ask_pipeline", lambda q, p, s: _answer())
+    monkeypatch.setattr(app_module, "ask_pipeline", lambda q, p, s, **_k: _answer())
     monkeypatch.setattr("kai.telemetry.Telemetry", lambda *a, **k: telemetry)
     monkeypatch.setattr("kai.pipeline.inform.InformStore", lambda *a, **k: inform)
 

@@ -155,9 +155,12 @@ class ChatService:
         """
 
         try:
+            payload = {"question": msg.text}
+            if msg.sender_email:
+                payload["asker"] = msg.sender_email
             resp = httpx.post(
                 self._base + "/ask",
-                json={"question": msg.text},
+                json=payload,
                 headers=self._headers(),
                 timeout=float(self._s.llm_timeout) + 30.0,
             )

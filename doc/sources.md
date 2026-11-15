@@ -87,6 +87,21 @@ SOURCE_DIRS=./samples,/mnt/handbook,/srv/runbooks
 All of these compose with `SOURCE_TYPE=confluence+files`, e.g. two Confluence
 instances **and** two local folders, ingested together.
 
+### Answer scoping by space
+
+Each chunk keeps a ``space`` tag (Confluence space key, ``url``, ``kai-curated``,
+etc.). To limit what a caller can retrieve:
+
+```dotenv
+ASK_SPACES=ENG,OPS                 # global allowlist (blank = full corpus)
+ASK_SPACE_ACL=alice@acme.com:ENG,OPS;@acme.com:ENG
+ASK_INCLUDE_CURATED=true           # when filtering, also include kai-curated
+```
+
+`ASK_SPACE_ACL` fails closed: unknown identities get no spaces. Chat bots send
+the sender as `asker` on `/ask`. Clients may also pass `spaces` to narrow
+further (never expand past the allowlist).
+
 > Any wiki/site that speaks the **Confluence REST API** works as an instance
 > (Cloud or Server/DC). Non-Confluence wikis (MediaWiki, generic doc sites) need a
 > different connector, see [the extension point](#adding-another-source-type) or

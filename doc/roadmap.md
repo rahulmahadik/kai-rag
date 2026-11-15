@@ -46,8 +46,12 @@ today. This page records what ships now and what's planned next. Contributions w
 - Escalation templates and auto-assignment by subject area.
 
 ### Answering & UX
-- Per-space / per-source access control and answer scoping.
+- Richer ACL (group/role sync from IdP); per-source tags beyond Confluence space.
 - Feedback-driven retrieval tuning.
+
+> **Shipped:** per-space answer scoping via `ASK_SPACES` / `ASK_SPACE_ACL` and
+> request `spaces`/`asker` on `/ask` and `/search` (chat bots send the sender as
+> `asker`).
 
 > **Not** token-streaming: KAI's grounding/verification guards run *after*
 > generation, so streaming raw tokens would show text that a guard might then

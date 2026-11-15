@@ -206,6 +206,13 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     top_k: int = 8
+    # Per-space answer scoping (blank = full corpus). ASK_SPACES is a global
+    # allowlist; ASK_SPACE_ACL maps identities (email, user id, or @domain) to
+    # spaces and fails closed when set. Request ``spaces`` can only narrow.
+    # Example ACL: alice@acme.com:ENG,OPS;@acme.com:ENG
+    ask_spaces: str = ""
+    ask_space_acl: str = ""
+    ask_include_curated: bool = True  # when filtering, also retrieve kai-curated
     # Escalate (don't answer) below this confidence. 0.45 is calibrated against the
     # golden question set (eval/golden.json): in-scope questions clear it, out-of-scope
     # fall below, biased toward escalating when unsure. Re-tune with eval/run_eval.py

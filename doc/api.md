@@ -32,7 +32,8 @@ user types ─┼─ Webex bot ──────────┼─►  POST /as
 ```
 
 - The **web UI** calls `/ask` over CORS and renders the answer, sources, confidence,
-  and an answered/escalated pill.
+  and an answered/escalated pill. Optional body fields: `spaces` (narrow retrieval
+  to those space tags) and `asker` (identity for `ASK_SPACE_ACL`).
 - The **Webex/Slack bots** (`kai/chat/`, run as separate processes) post the user's
   message to `/ask`, then post the reply back, Webex edits its "searching..." message
   in place. See [chat-platforms.md](chat-platforms.md) and
@@ -68,9 +69,9 @@ shows a capabilities message instead of being answered as a question.
 
 | Method & path | Auth | Purpose |
 | --- | --- | --- |
-| `POST /ask` | ✅ | Answer a question from the corpus. Body `{question}`. Returns `{answer, citations[], confidence, escalated, escalation_url, suggested_sources[]}`. The one endpoint every chat surface uses. |
+| `POST /ask` | ✅ | Answer a question from the corpus. Body `{question, spaces?, asker?}`. Optional `spaces` narrows retrieval; `asker` selects `ASK_SPACE_ACL`. Returns `{answer, citations[], confidence, escalated, escalation_url, suggested_sources[]}`. |
 | `POST /ask-document` | ✅ | Ad-hoc Q&A over an **uploaded file** (no corpus writes). Body `{question, filename, content_b64}`. Same never-fabricate guards, scoped to that file. |
-| `POST /search` | ✅ | Retrieve-only (no answer **generation**): top chunks + scores + the confidence/escalate decision. Uses the SAME retrieval path as `/ask`, so with `MULTI_QUERY`/`QUERY_REWRITE` on it still makes those query-expansion LLM calls; it just skips answer generation + verification. For evaluation/debugging. Body `{question}`. |
+| `POST /search` | ✅ | Retrieve-only (no answer **generation**): top chunks + scores + the confidence/escalate decision. Same retrieval path as `/ask` (including space scoping). Body `{question, spaces?, asker?}`. |
 
 ### Knowledge base
 

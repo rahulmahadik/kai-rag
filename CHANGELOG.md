@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.3
+
+### Added
+- **Per-space answer scoping.** `ASK_SPACES` (global allowlist), `ASK_SPACE_ACL`
+  (per email / user id / `@domain`, fail-closed), and request fields
+  `spaces` / `asker` on `/ask` and `/search`. Chat bots pass the sender as
+  `asker`. Filtered retrieval includes `kai-curated` by default
+  (`ASK_INCLUDE_CURATED`). Answer cache keys include scope so answers cannot
+  leak across ACL boundaries.
+
 ## 1.2.2
 
 ### Added

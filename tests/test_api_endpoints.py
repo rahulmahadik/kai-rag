@@ -35,7 +35,7 @@ def _answer(**over):
 @pytest.fixture()
 def client(monkeypatch):
     monkeypatch.setattr(app_module, "build_providers", _fake_providers)
-    monkeypatch.setattr(app_module, "ask_pipeline", lambda q, p, s: _answer())
+    monkeypatch.setattr(app_module, "ask_pipeline", lambda q, p, s, **_k: _answer())
     settings = Settings(
         _env_file=None,  # hermetic: don't absorb the local .env
         KAI_API_KEY="sekret",  # field uses a validation_alias, kwarg must match it
@@ -76,7 +76,7 @@ def test_ask_happy_path_includes_suggested_sources_field(client):
 
 
 def test_unhandled_error_returns_generic_500(monkeypatch, client):
-    def _boom(q, p, s):
+    def _boom(q, p, s, **_k):
         raise RuntimeError("secret-internal-url http://10.0.0.1:11434")
 
     monkeypatch.setattr(app_module, "ask_pipeline", _boom)
