@@ -10,7 +10,12 @@ import pytest
 
 from kai.chat.access import deny_message, is_allowed
 from kai.chat.files import download_url, slack_file_download, teams_attachment_download
-from kai.chat.notify import notify_user
+from kai.chat.notify import (
+    notify_on_escalation,
+    notify_user,
+    parse_notify_routes,
+    resolve_notify_recipient,
+)
 from kai.config import Settings
 from kai.factory import build_providers
 from kai.providers.github_issues import GitHubIssuesTracker
@@ -250,6 +255,38 @@ def test_notify_slack_rejects_opaque_non_id() -> None:
         _settings(chat_platform="slack", slack_bot_token="xoxb-t"), "not-a-uid", "hi"
     )
     assert not ok and "user id" in detail
+
+
+def test_parse_and_resolve_notify_routes() -> None:
+    routes = parse_notify_routes("ENG:alice@acme.com;OPS:U123;*:oncall@acme.com")
+    assert routes["eng"] == "alice@acme.com"
+    assert resolve_notify_recipient(routes, ["OPS"]) == "U123"
+    assert resolve_notify_recipient(routes, ["unknown"]) == "oncall@acme.com"
+    assert resolve_notify_recipient({}, ["ENG"]) == ""
+    assert parse_notify_routes("") == {}
+
+
+def test_notify_on_escalation_routes_and_skips(monkeypatch) -> None:
+    seen: dict = {}
+
+    def _fake(settings, recipient, message):
+        seen["to"] = recipient
+        seen["msg"] = message
+        return True, "sent"
+
+    monkeypatch.setattr("kai.chat.notify.notify_user", _fake)
+    ok, who = notify_on_escalation(
+        _settings(notify_routes="ENG:alice@acme.com;*:ops@acme.com"),
+        question="How does replication work in the ledger?",
+        spaces=["ENG"],
+        escalation_url="https://jira/KAI-1",
+    )
+    assert ok and who == "alice@acme.com"
+    assert "replication" in seen["msg"].lower()
+    assert "https://jira/KAI-1" in seen["msg"]
+
+    ok, detail = notify_on_escalation(_settings(notify_routes=""), question="x", spaces=["ENG"])
+    assert not ok and detail == "no route"
 
 
 # --- file download helpers ---

@@ -271,7 +271,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="KAI, Know · Ask · Inform",
         description=_description,
-        version="1.2.7",
+        version="1.2.8",
         openapi_tags=_tags_meta,
         contact={"name": "Rahul Mahadik", "url": "https://rahulmahadik.com"},
         license_info={
@@ -415,6 +415,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # The Answer dataclass (with nested Citation dataclasses) serialises
         # cleanly via asdict → JSON.
         payload = asdict(answer)
+        if answer.escalated and (getattr(settings, "notify_routes", "") or "").strip():
+            from kai.chat.notify import notify_on_escalation
+
+            route_spaces = [
+                (c.space or "").strip()
+                for c in (answer.suggested_sources or [])
+                if (getattr(c, "space", "") or "").strip()
+            ]
+            if not route_spaces and req.spaces:
+                route_spaces = [s for s in req.spaces if (s or "").strip()]
+            notified, route_detail = notify_on_escalation(
+                settings,
+                question=req.question,
+                spaces=route_spaces,
+                escalation_url=answer.escalation_url,
+            )
+            payload["escalation_notified"] = notified
+            if notified:
+                payload["escalation_notified_to"] = route_detail
         if cache_size and not answer.escalated:
             with _cache_lock:
                 answer_cache[key] = payload
@@ -546,7 +565,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except Exception as exc:  # noqa: BLE001 - degrade, never 500 the button
             logger.error("kai_escalation_failed err=%s", type(exc).__name__)
             url = ""
-        return {"status": "escalated", "escalation_url": url or None}
+        out: dict = {"status": "escalated", "escalation_url": url or None}
+        if (getattr(settings, "notify_routes", "") or "").strip():
+            from kai.chat.notify import notify_on_escalation
+
+            notified, route_detail = notify_on_escalation(
+                settings, question=req.question, spaces=None, escalation_url=url or None
+            )
+            out["escalation_notified"] = notified
+            if notified:
+                out["escalation_notified_to"] = route_detail
+        return out
 
     @app.post(
         "/notify",

@@ -137,6 +137,11 @@ class Settings(BaseSettings):
     # third-party cloud. Note the question itself still egresses on escalation;
     # that is documented behavior an operator accepts by configuring a tracker.
     escalation_include_draft: bool = False
+    # Space → chat recipient for proactive DM on escalation.
+    # Example: ENG:alice@acme.com;OPS:U123;*:oncall@acme.com
+    # Keys are Confluence space keys / source tags (e.g. url, files). ``*`` = default.
+    # Blank disables auto-notify. Delivery uses CHAT_PLATFORM (/notify path).
+    notify_routes: str = ""
 
     # ------------------------------------------------------------------
     # Webex bot (Phase 1): a thin websocket client over the /ask API.

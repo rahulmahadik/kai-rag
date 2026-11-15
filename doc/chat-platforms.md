@@ -71,6 +71,10 @@ DM are the sanctioned substitutes.
   user id or email (`users:read.email`). Teams: stores a conversation reference
   when the user messages the bot, then posts proactively to that conversation
   (prefer a 1:1 DM with the bot so the notify stays private).
+* **Escalation routing** (`NOTIFY_ROUTES`), e.g. `ENG:alice@acme.com;*:oncall@…`.
+  When `/ask` or `/escalate` escalates, KAI DMs the matching recipient (space tag
+  from suggested sources, else `*`). Best-effort; missing bot tokens only skip
+  the DM.
 * **Conversation memory** (`CONVERSATION_MEMORY=true`, EXPERIMENTAL, default off)
   prepends the last question's topic to a referential follow-up ("what about X?")
   so it retrieves in context. The enriched query still runs the FULL gate + guards,

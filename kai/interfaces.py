@@ -88,6 +88,7 @@ class Citation:
 
     title: str
     url: str
+    space: str = ""
 
 
 @dataclass

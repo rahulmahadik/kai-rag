@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.8
+
+### Added
+- **Space-based escalation notify routing.** `NOTIFY_ROUTES` maps space/source
+  tags to a chat recipient (`ENG:alice@…;*:oncall@…`). On `/ask` or `/escalate`
+  escalation, KAI DMs the matched on-call via `CHAT_PLATFORM` (best-effort;
+  response may include `escalation_notified`). Citations now carry `space`.
+
 ## 1.2.7
 
 ### Added

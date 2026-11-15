@@ -44,12 +44,12 @@ today. This page records what ships now and what's planned next. Contributions w
 
 ### Escalation & notifications, *raise a ticket / page a person*
 - Trackers beyond Jira/GitHub/email: ServiceNow, Linear, GitLab.
-- Topic/space-based notify routing with acknowledgement; richer Teams
-  conversation creation (open a fresh 1:1 when only a channel ref exists).
-- Escalation templates and auto-assignment by subject area.
+- Richer Teams conversation creation (open a fresh 1:1 when only a channel
+  ref exists); escalation templates and auto-assignment by subject area.
 
 > **Shipped:** Jira, GitHub Issues, and plain SMTP email escalation
-> (`ESCALATION_EMAIL_TO` / `ESCALATION_SMTP_*`).
+> (`ESCALATION_EMAIL_TO` / `ESCALATION_SMTP_*`); space-based notify routing
+> (`NOTIFY_ROUTES`).
 
 ### Answering & UX
 - Richer ACL (group/role sync from IdP); per-source tags beyond Confluence space.

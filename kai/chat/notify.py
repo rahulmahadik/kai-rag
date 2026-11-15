@@ -1,6 +1,7 @@
 """Proactive DM helpers for Webex, Slack, and Teams.
 
-Used by ``POST /notify`` and the Inform-approve close-the-loop path.
+Used by ``POST /notify``, Inform-approve close-the-loop, and optional
+space-based escalation routing (``NOTIFY_ROUTES``).
 Teams needs a previously stored conversation reference (saved when the user
 messages the bot); cold-open from only a user id is not supported by Bot Framework.
 """
@@ -8,10 +9,68 @@ messages the bot); cold-open from only a user id is not supported by Bot Framewo
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 
 from kai.config import Settings
 
 logger = logging.getLogger("kai.chat.notify")
+
+
+def parse_notify_routes(raw: str) -> dict[str, str]:
+    """Parse ``NOTIFY_ROUTES`` (``ENG:alice@x;OPS:U123;*:oncall@x``) → map.
+
+    Keys are lowercased space/source tags; ``*`` is the default catch-all.
+    """
+
+    out: dict[str, str] = {}
+    for part in (raw or "").split(";"):
+        part = part.strip()
+        if not part or ":" not in part:
+            continue
+        key, _, val = part.partition(":")
+        key, val = key.strip().lower(), val.strip()
+        if key and val:
+            out[key] = val
+    return out
+
+
+def resolve_notify_recipient(routes: dict[str, str], spaces: Sequence[str] | None = None) -> str:
+    """Pick the first route matching a space tag, else ``*``, else ``\"\"``."""
+
+    if not routes:
+        return ""
+    for space in spaces or ():
+        tag = (space or "").strip().lower()
+        if tag and tag in routes:
+            return routes[tag]
+    return routes.get("*", "") or ""
+
+
+def notify_on_escalation(
+    settings: Settings,
+    *,
+    question: str,
+    spaces: Sequence[str] | None = None,
+    escalation_url: str | None = None,
+) -> tuple[bool, str]:
+    """DM the routed on-call when ``NOTIFY_ROUTES`` matches. Best-effort."""
+
+    routes = parse_notify_routes(getattr(settings, "notify_routes", "") or "")
+    who = resolve_notify_recipient(routes, spaces)
+    if not who:
+        return False, "no route"
+    q = " ".join((question or "").split())
+    if len(q) > 240:
+        q = q[:237] + "..."
+    msg = f"KAI escalated a question for follow-up:\n\n{q}"
+    if escalation_url:
+        msg += f"\n\n{escalation_url}"
+    ok, detail = notify_user(settings, who, msg)
+    if ok:
+        logger.info("kai_escalation_notified recipient=%s", who)
+    else:
+        logger.warning("kai_escalation_notify_failed recipient=%s detail=%s", who, detail)
+    return ok, who if ok else detail
 
 
 def notify_user(settings: Settings, recipient: str, message: str) -> tuple[bool, str]:

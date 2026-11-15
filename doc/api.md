@@ -69,7 +69,7 @@ shows a capabilities message instead of being answered as a question.
 
 | Method & path | Auth | Purpose |
 | --- | --- | --- |
-| `POST /ask` | ✅ | Answer a question from the corpus. Body `{question, spaces?, asker?}`. Optional `spaces` narrows retrieval; `asker` selects `ASK_SPACE_ACL`. Returns `{answer, citations[], confidence, escalated, escalation_url, suggested_sources[]}`. |
+| `POST /ask` | ✅ | Answer a question from the corpus. Body `{question, spaces?, asker?}`. Optional `spaces` narrows retrieval; `asker` selects `ASK_SPACE_ACL`. Returns `{answer, citations[], confidence, escalated, escalation_url, suggested_sources[]}` (citations include `space`). When `NOTIFY_ROUTES` is set and the answer escalates, may also include `escalation_notified` / `escalation_notified_to`. |
 | `POST /ask-document` | ✅ | Ad-hoc Q&A over an **uploaded file** (no corpus writes). Body `{question, filename, content_b64}`. Same never-fabricate guards, scoped to that file. |
 | `POST /search` | ✅ | Retrieve-only (no answer **generation**): top chunks + scores + the confidence/escalate decision. Same retrieval path as `/ask` (including space scoping). Body `{question, spaces?, asker?}`. |
 

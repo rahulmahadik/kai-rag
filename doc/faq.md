@@ -92,7 +92,9 @@ confidently... flagged it for a human" is the never-fabricate guarantee, not a f
 **Where do escalations go?** Configure one tracker in `.env` (preference order):
 **Jira** (`JIRA_*`), **GitHub Issues** (`GITHUB_TOKEN` + `GITHUB_REPO`), or
 **email** (`ESCALATION_EMAIL_TO` / `FROM` + `ESCALATION_SMTP_*`). With none set,
-KAI only logs the escalation locally (no fake ticket link).
+KAI only logs the escalation locally (no fake ticket link). Optionally set
+`NOTIFY_ROUTES` (e.g. `ENG:alice@acme.com;*:oncall@acme.com`) to DM the matching
+on-call on the active `CHAT_PLATFORM` when an answer escalates.
 
 **How do I tune accuracy?** A few levers, roughly in order of impact:
 

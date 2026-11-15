@@ -1081,7 +1081,9 @@ def _citations_from(scored: list[ScoredChunk]) -> list[Citation]:
         if key in seen:
             continue
         seen.add(key)
-        citations.append(Citation(title=sc.chunk.title, url=url))
+        citations.append(
+            Citation(title=sc.chunk.title, url=url, space=getattr(sc.chunk, "space", "") or "")
+        )
     return citations
 
 
