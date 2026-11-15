@@ -53,19 +53,22 @@ DM are the sanctioned substitutes.
 
 ## Webex enhancements (shipped)
 
-* **Inbound file Q&A**: a user @mentions the bot with a file attached; KAI downloads
-  it (size-capped), runs ad-hoc RAG over **that file only** via `/ask-document`, and
-  replies in-thread with a "read just for this question, not saved" note. Reuses the
-  `kai/providers/file_source.py` extraction. (Slack/Teams don't handle attachments yet.)
+* **Inbound file Q&A** (Webex, Slack, Teams): a user @mentions the bot with a file
+  attached; KAI downloads it (size-capped), runs ad-hoc RAG over **that file only**
+  via `/ask-document`, and replies in-thread with a "read just for this question,
+  not saved" note. Slack needs the `files:read` bot scope; Teams uses `contentUrl`
+  when the activity carries it.
+* **Allowlists** on every platform: `WEBEX_APPROVED_*`, `SLACK_APPROVED_USERS`,
+  `TEAMS_APPROVED_USERS`. Blank = anyone who can reach the bot.
 * **Edit-in-place** (`WEBEX_EDIT_IN_PLACE=true`, default), the "🔎 Searching..." ack
   message is EDITED into "**Here's what I found:** ..." via `PUT /messages/{id}`,
   instead of delete-then-repost. No notification churn, keeps thread position.
   Overflow pieces + the feedback card post as in-thread follow-ups (a card-bearing
   message can't be edited). Falls back to a normal reply if the REST edit fails.
-* **Proactive DM**, `POST /notify {email, message}` (API, auth-gated) DMs a user
-  via `toPersonEmail`. Use it to tell the asker when their escalation is resolved
-  (the Inform loop calls this automatically on approval). Webex rule: the recipient
-  must have messaged the bot before.
+* **Proactive DM**, `POST /notify {recipient|email, message}` (API, auth-gated)
+  DMs a user on Webex or Slack (`CHAT_PLATFORM`). Inform approval calls this
+  automatically. Webex: recipient must have messaged the bot before. Slack:
+  user id or email (`users:read.email`). Teams cold-DM is not supported.
 * **Conversation memory** (`CONVERSATION_MEMORY=true`, EXPERIMENTAL, default off)
   prepends the last question's topic to a referential follow-up ("what about X?")
   so it retrieves in context. The enriched query still runs the FULL gate + guards,

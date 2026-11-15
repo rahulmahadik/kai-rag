@@ -192,7 +192,7 @@ When a human answers an escalated/gap question well, that validated Q&A becomes 
 
 ## 8. Status & future scope
 
-**Built (v1):** Confluence (multi-space, multi-instance, Cloud + Server/DC) and local files ingested together; `/ask` + `/ask-document` + `/search` + feedback/escalate + `/admin/*`; hybrid retrieval (dense + full-text, RRF) + cross-encoder rerank + confidence gate + grounding/verification guards; Jira escalation (local fallback); the Inform learn-back loop (approval-gated, 4-eyes optional, 👎 quarantine); web UI + Webex/Slack/Teams bots; model-agnostic via config.
+**Built (v1.2):** Confluence (multi-space, multi-instance, Cloud + Server/DC), local files, and URL/sitemap sources; `/ask` + `/ask-document` + `/search` + feedback/escalate + `/notify` + `/admin/*`; hybrid retrieval (dense + full-text, RRF) + cross-encoder rerank + confidence gate + grounding/verification guards; Jira or GitHub Issues escalation (local fallback); the Inform learn-back loop (approval-gated, 4-eyes optional, 👎 quarantine, `frontend/admin.html`); web UI + Webex/Slack/Teams bots (allowlists + file attach); model-agnostic via config.
 
 **Future scope (not built):**
 - **More sources** behind `KBSource`: a web/URL crawler (the general path for non-Confluence wikis like MediaWiki/DokuWiki), SharePoint, Google Drive, Git repos/wikis.

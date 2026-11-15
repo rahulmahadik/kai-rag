@@ -22,7 +22,9 @@ from __future__ import annotations
 import logging
 import re
 
+from kai.chat.access import deny_message, is_allowed
 from kai.chat.base import FeedbackEvent, IncomingMessage
+from kai.chat.files import slack_file_download
 from kai.chat.service import HELP_TEXT, ChatService, format_reply, is_help_request, split_message
 from kai.config import Settings
 
@@ -214,15 +216,60 @@ class SlackAdapter:
                     blocks += feedback_blocks(question, escalate_only=escalated)
                 say(channel=channel, thread_ts=thread_ts, text=piece, blocks=blocks)
 
+        approved_users = getattr(settings, "slack_approved_users", "") or ""
+
         def _handle(event, say):  # noqa: ANN001
             text = re.sub(r"<@[^>]+>", "", event.get("text", "")).strip()  # strip @mention
-            if not text:
+            files = list(event.get("files") or [])
+            if not text and not files:
+                return
+            user = (event.get("user") or "").strip()
+            # Also accept username if present in the event (rare); ids are the stable form.
+            if not is_allowed(user, approved_users=approved_users):
+                say(
+                    channel=event["channel"],
+                    thread_ts=event.get("thread_ts") or event.get("ts"),
+                    text=deny_message(),
+                )
                 return
             thread_ts = event.get("thread_ts") or event.get("ts")
-            if is_help_request(text):
+            if text and is_help_request(text) and not files:
                 say(channel=event["channel"], thread_ts=thread_ts, text=md_to_mrkdwn(HELP_TEXT))
                 return
-            data, err = service.answer(IncomingMessage(text=text, thread_id=thread_ts))
+
+            # Inbound file Q&A: answer about the attached file instead of the corpus.
+            if files:
+                max_bytes = int(getattr(settings, "file_max_bytes", 0) or 0)
+                dl = slack_file_download(bot_token, files[0], max_bytes=max_bytes)
+                if not dl:
+                    say(
+                        channel=event["channel"],
+                        thread_ts=thread_ts,
+                        text=(
+                            "Sorry. I couldn't read that attachment. It may be larger "
+                            "than I can handle; try a smaller file, or ask me in text."
+                        ),
+                    )
+                    return
+                fname, data_bytes = dl
+                question = text or f"Summarize {fname}"
+                doc, derr = service.ask_document(fname, data_bytes, question)
+                reply_md = derr if doc is None else format_reply(doc)
+                if doc is not None and not doc.get("escalated"):
+                    reply_md += (
+                        f"\n\n_(Answered from *{fname}* just for this question. "
+                        "The file isn't stored or added to the knowledge base.)_"
+                    )
+                say(
+                    channel=event["channel"],
+                    thread_ts=thread_ts,
+                    text=md_to_mrkdwn(reply_md),
+                )
+                return
+
+            data, err = service.answer(
+                IncomingMessage(text=text, sender_email=user, thread_id=thread_ts)
+            )
             if data is None:
                 say(channel=event["channel"], thread_ts=thread_ts, text=err)
                 return

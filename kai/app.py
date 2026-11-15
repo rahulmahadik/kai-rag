@@ -137,10 +137,14 @@ class ApproveRequest(BaseModel):
 
 
 class NotifyRequest(BaseModel):
-    """Body for ``POST /notify``, proactively DM a Webex user (e.g. when an
-    escalation is resolved, or from the future Inform loop)."""
+    """Body for ``POST /notify``, proactively DM a user on the active chat platform.
 
-    email: str = Field(..., min_length=3, max_length=320)
+    ``email`` is the legacy Webex field; ``recipient`` is preferred (email on
+    Webex, Slack user id / email on Slack). When both are set, ``recipient`` wins.
+    """
+
+    email: str = Field(default="", max_length=320)
+    recipient: str = Field(default="", max_length=320)
     message: str = Field(..., min_length=1, max_length=7000)
 
 
@@ -246,7 +250,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="KAI, Know · Ask · Inform",
         description=_description,
-        version="1.1.1",
+        version="1.2.0",
         openapi_tags=_tags_meta,
         contact={"name": "Rahul Mahadik", "url": "https://rahulmahadik.com"},
         license_info={
@@ -526,35 +530,35 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post(
         "/notify",
         tags=["Feedback & escalation"],
-        summary="Proactively DM a Webex user (e.g. when an escalation is resolved)",
+        summary="Proactively DM a user (Webex or Slack; see CHAT_PLATFORM)",
         dependencies=[Depends(_require_api_key)],
     )
     def notify(req: NotifyRequest) -> dict:
-        """Proactively DM a user on the active chat platform (Webex).
+        """Proactively DM a user on the active chat platform.
 
-        Closes the loop: when an escalation is answered (by a human, or the future
-        Inform loop), notify the original asker directly. Uses WEBEX_BOT_TOKEN; the
-        recipient must have messaged the bot before (Webex 1:1 rule).
+        Closes the loop when an escalation is answered. Webex needs an email and
+        ``WEBEX_BOT_TOKEN``; Slack needs a user id (or email) and ``SLACK_BOT_TOKEN``.
+        Teams cold-DM is not supported.
         """
 
-        token = (settings.webex_bot_token or "").strip()
-        if not token:
-            raise HTTPException(status_code=400, detail="WEBEX_BOT_TOKEN is not configured.")
-        if not _EMAIL_RE.fullmatch((req.email or "").strip()):
-            raise HTTPException(status_code=422, detail="email must be a valid address.")
-        from kai.chat.webex import send_direct_message
+        from kai.chat.notify import notify_user
 
-        sent = send_direct_message(token, req.email, req.message)
-        if not sent:
-            # Don't return 200 on a failed send. The caller can't tell it didn't land.
-            raise HTTPException(
-                status_code=502,
-                detail=(
-                    "Could not deliver the notification "
-                    "(the recipient may not have messaged the bot)."
-                ),
+        who = (req.recipient or req.email or "").strip()
+        if not who:
+            raise HTTPException(status_code=422, detail="recipient (or email) is required.")
+        platform = (settings.chat_platform or "webex").strip().lower()
+        if platform == "webex" and not _EMAIL_RE.fullmatch(who):
+            raise HTTPException(status_code=422, detail="email must be a valid address.")
+        ok, detail = notify_user(settings, who, req.message)
+        if not ok:
+            # Misconfiguration is a client error; delivery failure is upstream.
+            cfg_err = (
+                "not configured" in detail
+                or "needs:" in detail
+                or detail.startswith("Teams proactive")
             )
-        return {"status": "sent"}
+            raise HTTPException(status_code=400 if cfg_err else 502, detail=detail)
+        return {"status": "sent", "detail": detail}
 
     @app.get(
         "/metrics",
@@ -678,12 +682,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # Close the loop: DM the original asker that their question now has an answer.
         notified = False
         asker = (cand.get("asker") or "").strip()
-        token = (settings.webex_bot_token or "").strip()
-        if asker and token:
-            from kai.chat.webex import send_direct_message
+        if asker:
+            from kai.chat.notify import notify_user
 
-            notified = send_direct_message(
-                token,
+            notified, _detail = notify_user(
+                settings,
                 asker,
                 f"Good news, your question **{cand['question']}** now has an answer in KAI. "
                 "Ask me again and I'll share it.",

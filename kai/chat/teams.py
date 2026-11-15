@@ -23,7 +23,9 @@ import re
 import threading
 import time
 
+from kai.chat.access import deny_message, is_allowed
 from kai.chat.base import FeedbackEvent, IncomingMessage
+from kai.chat.files import teams_attachment_download
 from kai.chat.service import HELP_TEXT, ChatService, format_reply, is_help_request, split_message
 from kai.chat.webex import feedback_card  # the Adaptive Card JSON is portable to Teams
 
@@ -73,7 +75,11 @@ def parse_activity(activity: dict) -> tuple[str, IncomingMessage | None, Feedbac
         )
 
     text = _strip_mention(activity.get("text", ""))
-    if not text:
+    has_file = any(
+        isinstance(a, dict) and (a.get("contentUrl") or "").strip()
+        for a in (activity.get("attachments") or [])
+    )
+    if not text and not has_file:
         return "ignore", None, None
     return "message", IncomingMessage(text=text, sender_email=sender, raw=activity), None
 
@@ -106,6 +112,7 @@ class TeamsAdapter:
     name = "teams"
 
     def __init__(self, settings) -> None:  # noqa: ANN001 - Settings, avoid import cycle
+        self._settings = settings
         self._service = ChatService(settings)
         self._app_id = (getattr(settings, "teams_app_id", "") or "").strip()
         self._app_password = (getattr(settings, "teams_app_password", "") or "").strip()
@@ -115,6 +122,7 @@ class TeamsAdapter:
         self._host = getattr(settings, "teams_host", "0.0.0.0")
         self._port = int(getattr(settings, "teams_port", 3978) or 3978)
         self._show_card = bool(getattr(settings, "webex_feedback_card", False))
+        self._approved_users = getattr(settings, "teams_approved_users", "") or ""
         self._jwks = None  # lazily-built PyJWKClient
         self._token: str | None = None  # cached Connector token (+ expiry)
         self._token_exp: float = 0.0
@@ -286,6 +294,43 @@ class TeamsAdapter:
                 self._retire_card(activity, ack or "Thanks, feedback received.")
                 return Response(status_code=200)
             if kind == "message":
+                if not is_allowed(msg.sender_email, approved_users=self._approved_users):
+                    self._reply(activity, deny_message(), None)
+                    return Response(status_code=200)
+                # File attach → /ask-document when the activity carries a contentUrl.
+                attachments = [
+                    a
+                    for a in (activity.get("attachments") or [])
+                    if isinstance(a, dict) and (a.get("contentUrl") or "").strip()
+                ]
+                if attachments:
+                    max_bytes = int(getattr(self._settings, "file_max_bytes", 0) or 0)
+                    try:
+                        auth = f"Bearer {self._connector_token()}"
+                    except Exception:  # noqa: BLE001
+                        auth = ""
+                    dl = teams_attachment_download(
+                        attachments[0], max_bytes=max_bytes, auth_header=auth
+                    )
+                    if not dl:
+                        self._reply(
+                            activity,
+                            "Sorry. I couldn't read that attachment. Try a smaller file, "
+                            "or ask me in text.",
+                            None,
+                        )
+                        return Response(status_code=200)
+                    fname, data_bytes = dl
+                    question = msg.text or f"Summarize {fname}"
+                    doc, derr = self._service.ask_document(fname, data_bytes, question)
+                    text = derr if doc is None else format_reply(doc)
+                    if doc is not None and not doc.get("escalated"):
+                        text += (
+                            f"\n\n_(Answered from **{fname}** just for this question. "
+                            "The file isn't stored or added to the knowledge base.)_"
+                        )
+                    self._reply(activity, text, None)
+                    return Response(status_code=200)
                 if is_help_request(msg.text):
                     self._reply(activity, HELP_TEXT, None)
                     return Response(status_code=200)

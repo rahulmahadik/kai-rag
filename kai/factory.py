@@ -162,10 +162,11 @@ def _build_kb(settings: Settings) -> KBSource:
     both = bool(tokens & {"both", "all"})
     want_conf = both or "confluence" in tokens
     want_files = both or bool(tokens & {"files", "file"})
-    if not (want_conf or want_files):
+    want_urls = bool(tokens & {"urls", "url", "web", "http", "https"})
+    if not (want_conf or want_files or want_urls):
         raise ValueError(
             f"Unsupported SOURCE_TYPE {settings.source_type!r}; use "
-            "'confluence', 'files', or 'confluence+files'."
+            "'confluence', 'files', 'urls', or a '+' combination."
         )
 
     sources: list[KBSource] = []
@@ -213,6 +214,11 @@ def _build_kb(settings: Settings) -> KBSource:
             )
             sources.append(FileKBSource(per_dir))
 
+    if want_urls:
+        from kai.providers.url_source import UrlKBSource
+
+        sources.append(UrlKBSource(settings))
+
     if len(sources) == 1:
         return sources[0]
     from kai.providers.file_source import CompositeKBSource
@@ -257,8 +263,7 @@ def build_providers(settings: Settings) -> Providers:
 
     kb: KBSource = _build_kb(settings)
 
-    # Escalation tracker: real Jira when fully configured, else a local tracker
-    # that records the escalation without a fake ticket URL.
+    # Escalation tracker preference: Jira → GitHub Issues → local log-only.
     if _set(
         settings.jira_base_url,
         settings.jira_email,
@@ -268,6 +273,13 @@ def build_providers(settings: Settings) -> Providers:
         from kai.providers.jira_cloud import JiraCloudTracker
 
         tracker: Tracker = JiraCloudTracker(settings)
+    elif _set(
+        getattr(settings, "github_token", ""),
+        getattr(settings, "github_repo", ""),
+    ):
+        from kai.providers.github_issues import GitHubIssuesTracker
+
+        tracker = GitHubIssuesTracker(settings)
     else:
         from kai.providers.local_tracker import LocalTracker
 

@@ -17,6 +17,7 @@ clashes with anything else running on this machine.
     python run/setup.py doctor       check Postgres / pgvector / Ollama / deps
     python run/setup.py fresh        WIPE the DB, then install + start + ingest (clean rebuild)
     python run/setup.py supervise    keep the API alive (auto-restart) for a demo
+    python run/setup.py schedule-ingest   print a cron/systemd timer snippet for periodic ingest
 
 You still install the LLM/embedding models yourself (e.g. `ollama pull
 qwen2.5:14b-instruct && ollama pull nomic-embed-text`); `doctor` checks they're up.
@@ -419,6 +420,55 @@ def do_bot() -> None:
     subprocess.run([str(_py()), "-m", "kai.bot"], cwd=str(ROOT), check=False)
 
 
+def do_schedule_ingest() -> None:
+    """Print cron and systemd timer snippets for periodic ``ingest``.
+
+    KAI does not run a built-in scheduler: operators wire the existing
+    ``python run/setup.py ingest`` into cron or systemd on their host.
+    """
+
+    py = _py()
+    ingest = f"cd {ROOT} && {py} run/setup.py ingest >> /tmp/kai.ingest.log 2>&1"
+    print(
+        """# Periodic ingest (KAI does not ship a daemon scheduler).
+# Pick ONE of the snippets below; adjust the schedule to your corpus freshness.
+
+# --- cron (every 6 hours) ---
+# crontab -e, then add:
+0 */6 * * * """
+        + ingest
+        + """
+
+# --- systemd user timer ---
+# ~/.config/systemd/user/kai-ingest.service
+[Unit]
+Description=KAI knowledge-base ingest
+
+[Service]
+Type=oneshot
+WorkingDirectory="""
+        + str(ROOT)
+        + """
+ExecStart="""
+        + f"{py} run/setup.py ingest"
+        + """
+
+# ~/.config/systemd/user/kai-ingest.timer
+[Unit]
+Description=Run KAI ingest every 6 hours
+
+[Timer]
+OnCalendar=*-*-* 0/6:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+
+# Then: systemctl --user daemon-reload && systemctl --user enable --now kai-ingest.timer
+"""
+    )
+
+
 COMMANDS = {
     "install": do_install,
     "start": do_start,
@@ -433,6 +483,7 @@ COMMANDS = {
     "bot": do_bot,
     "doctor": do_doctor,
     "fresh": do_fresh,
+    "schedule-ingest": do_schedule_ingest,
 }
 
 

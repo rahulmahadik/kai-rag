@@ -70,7 +70,8 @@ class Settings(BaseSettings):
     # Knowledge source selection
     #   "confluence": a Confluence space (default)
     #   "files", local files under SOURCE_DIR (PDF / md / txt / html)
-    #   "confluence+files", both, ingested together (alias: "both")
+    #   "urls", HTTP pages listed in SOURCE_URLS and/or SOURCE_SITEMAP
+    #   combine with +, e.g. "confluence+files", "files+urls", "both" (= confluence+files)
     # ------------------------------------------------------------------
     source_type: str = "confluence"
     source_dir: str = ""  # directory of files to ingest when source_type includes files
@@ -82,6 +83,10 @@ class Settings(BaseSettings):
     # cap: an image-heavy PDF can be huge with few pages while a long text PDF is
     # small, so bytes: not page count, is the right guard against OOM on ingest.
     file_max_bytes: int = 25_000_000  # ~25 MB
+    # URL / sitemap source (SOURCE_TYPE includes urls|web|http).
+    source_urls: str = ""  # comma-separated seed page URLs
+    source_sitemap: str = ""  # sitemap.xml URL (urlset or sitemap index)
+    source_url_max_pages: int = 100  # hard cap on pages fetched per ingest
 
     # ------------------------------------------------------------------
     # Confluence Cloud (knowledge base)
@@ -99,19 +104,23 @@ class Settings(BaseSettings):
     confluence_root_page: str = ""
 
     # ------------------------------------------------------------------
-    # Jira Cloud (escalation tracker)
+    # Escalation tracker: Jira Cloud and/or GitHub Issues.
+    # Preference when both are fully configured: Jira. Neither → local log only.
     # ------------------------------------------------------------------
-    jira_base_url: str = ""  # https://you.atlassian.net, blank disables escalation tickets
+    jira_base_url: str = ""  # https://you.atlassian.net, blank disables Jira tickets
     jira_email: str = ""  # account email for Jira Basic auth
     jira_api_token: str = ""  # Jira API token
     jira_project_key: str = ""  # project escalation tickets are filed in, e.g. "SUP"
     jira_issue_type: str = "Task"  # issue type to create, e.g. "Task" / "Bug"
+    github_token: str = ""  # classic or fine-grained PAT with issues:write
+    github_repo: str = ""  # owner/name, e.g. "acme/runbooks"
+    github_api_url: str = "https://api.github.com"  # override for GitHub Enterprise
     # Data-egress boundary: when escalating to an EXTERNAL tracker, the
     # ticket body always carries the question + closest sources; the MODEL DRAFT
     # (unverified generated text) is included only when this is on. Default OFF,
     # residency-sensitive deploys shouldn't ship unverified model output to a
     # third-party cloud. Note the question itself still egresses on escalation;
-    # that is documented behavior an operator accepts by configuring Jira.
+    # that is documented behavior an operator accepts by configuring a tracker.
     escalation_include_draft: bool = False
 
     # ------------------------------------------------------------------
@@ -138,6 +147,8 @@ class Settings(BaseSettings):
     slack_bot_token: str = ""  # CHAT_PLATFORM=slack, Socket Mode needs both tokens
     slack_app_token: str = ""
     slack_feedback_buttons: bool = True
+    # Restrict who Slack answers (comma-separated user ids or usernames). Blank = anyone.
+    slack_approved_users: str = ""
     # CHAT_PLATFORM=teams, Azure Bot Service registration (pip install '.[teams]').
     # Teams is INBOUND: it serves POST /api/messages, so it needs a public HTTPS URL.
     teams_app_id: str = ""
@@ -145,6 +156,8 @@ class Settings(BaseSettings):
     teams_app_tenant_id: str = ""  # blank = multi-tenant (botframework.com)
     teams_host: str = "0.0.0.0"
     teams_port: int = 3978
+    # Restrict who Teams answers (comma-separated AAD object ids or UPNs). Blank = anyone.
+    teams_approved_users: str = ""
     # Edit the "searching..." ack message into the answer in place (no delete/repost
     # churn) instead of delete-then-post. Falls back to a normal reply if the
     # direct Webex REST edit fails. Webex only.

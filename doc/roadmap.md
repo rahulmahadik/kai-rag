@@ -11,18 +11,21 @@ today. This page records what ships now and what's planned next. Contributions w
   guards that escalate instead of fabricating (validated by the golden eval in
   `eval/` + the automated test suite).
 - **Sources**, Confluence with **multiple spaces and multiple instances**
-  (Cloud *and* self-hosted Server/Data Center), plus local files/PDF/Markdown/HTML
-  with **multiple directories**, all ingested together.
-- **Interfaces**: a standalone web chat UI (`frontend/`) with file upload, the HTTP
-  API, and Webex + Slack bots; a Microsoft Teams adapter is included (verify in your
-  own Azure tenant).
-- **Escalation**, opens a **Jira ticket** on low-confidence questions, and can
-  **proactively DM a user** on Webex (`/notify`).
-- **Learning loop**, approval-gated curated answers, with an audit trail and
-  👎-driven auto-removal; observability via `/metrics` and `/admin/gaps`.
-- **Ad-hoc document Q&A**, drop a file (`POST /ask-document`, or 📎 in the web UI)
-  and ask about *just that file*; read once, answered with the same never-fabricate
-  guards, never written to the corpus.
+  (Cloud *and* self-hosted Server/Data Center), local files/PDF/Markdown/HTML
+  with **multiple directories**, and **URL / sitemap** pages (`SOURCE_TYPE=urls`),
+  all ingested together. `setup.py schedule-ingest` prints cron/systemd snippets.
+- **Interfaces**: a standalone web chat UI (`frontend/`) with file upload + an
+  Inform review page (`admin.html`), the HTTP API, and Webex + Slack + Teams
+  bots (Teams: verify in your Azure tenant). Allowlists and file attachments on
+  all three platforms.
+- **Escalation**, opens a **Jira** or **GitHub Issues** ticket on low-confidence
+  questions, and can **proactively DM** on Webex or Slack (`/notify`).
+- **Learning loop**, approval-gated curated answers (API + `frontend/admin.html`),
+  with an audit trail and 👎-driven auto-removal; observability via `/metrics`
+  and `/admin/gaps`.
+- **Ad-hoc document Q&A**, drop a file (`POST /ask-document`, 📎 in the web UI, or
+  attach in Webex/Slack/Teams) and ask about *just that file*; read once,
+  answered with the same never-fabricate guards, never written to the corpus.
 - **Retrieve-only search**, `POST /search` returns the ranked chunks + scores + the
   escalate decision (no answer generation) for evaluation and debugging.
 - **Deploy**, Docker Compose + systemd; any OpenAI-compatible LLM/embeddings,
@@ -31,21 +34,17 @@ today. This page records what ships now and what's planned next. Contributions w
 ## Planned
 
 ### More knowledge sources
-- **Web / URL crawler**, ingest any docs site or `sitemap.xml`. This is the
-  general path for **non-Confluence wikis** (MediaWiki, DokuWiki, etc.) and plain
-  documentation websites.
-- Connectors for SharePoint, Google Drive, and Git repos/wikis (GitHub/GitLab).
+- Deeper crawl (link-following beyond sitemap seeds), and connectors for
+  SharePoint, Google Drive, and Git repos/wikis (GitHub/GitLab).
 
 ### Escalation & notifications, *raise a ticket / page a person*
-- **Pluggable trackers beyond Jira**, GitHub/GitLab issues, ServiceNow, Linear,
-  or plain email, behind the existing `Tracker` interface.
-- **Personal paging**, DM the right person or on-call directly on Slack/Teams
-  (today: Webex DM), with topic/space-based routing and acknowledgement.
+- Trackers beyond Jira/GitHub: ServiceNow, Linear, GitLab, or plain email.
+- Teams proactive DM (stored conversation reference) and topic/space-based
+  routing with acknowledgement.
 - Escalation templates and auto-assignment by subject area.
 
 ### Answering & UX
 - Per-space / per-source access control and answer scoping.
-- Per-user access control for Slack/Teams (Webex has it today).
 - Feedback-driven retrieval tuning.
 
 > **Not** token-streaming: KAI's grounding/verification guards run *after*

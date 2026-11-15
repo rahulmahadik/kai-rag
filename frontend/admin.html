@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KAI · Inform review</title>
+<style>
+  :root { --bg:#0f1420; --panel:#161d2e; --muted:#8a97ad; --accent:#5b8def;
+          --ok:#7ddca0; --warn:#caa34a; --bad:#e07a7a; --text:#e8edf6; --line:#26304a; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+         background:var(--bg); color:var(--text); min-height:100vh; }
+  header { padding:14px 18px; border-bottom:1px solid var(--line); display:flex;
+           align-items:center; gap:10px; flex-wrap:wrap; }
+  header b { font-size:16px; } header .tag { color:var(--muted); font-size:12.5px; }
+  header a { color:var(--accent); text-decoration:none; font-size:13px; }
+  .cfg { width:210px; padding:7px 9px; border-radius:8px; border:1px solid var(--line);
+         background:#0c111b; color:var(--text); font-size:12px; }
+  .cfg.key { width:150px; } .cfg.sm { width:140px; }
+  main { max-width:960px; margin:0 auto; padding:18px; }
+  .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
+  select, button, .inp { padding:8px 12px; border-radius:8px; border:1px solid var(--line);
+         background:#0c111b; color:var(--text); font-size:13px; }
+  button { background:var(--accent); border:0; color:#fff; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--text); }
+  button.bad { background:#5a2a2a; }
+  button.ok { background:#1c3b2a; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+          padding:14px 16px; margin-bottom:12px; }
+  .card .q { font-weight:600; margin-bottom:6px; }
+  .card .a { white-space:pre-wrap; color:#c8d2e4; margin:8px 0; }
+  .meta { font-size:12px; color:var(--muted); display:flex; gap:12px; flex-wrap:wrap; }
+  .pill { display:inline-block; padding:1px 7px; border-radius:9px; font-size:11px;
+          background:#13203a; color:var(--muted); }
+  .pill.pending { color:var(--warn); } .pill.approved { color:var(--ok); }
+  .pill.rejected, .pill.revoked, .pill.quarantined { color:var(--bad); }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:center; }
+  .empty, .err { color:var(--muted); padding:24px 0; text-align:center; }
+  .err { color:var(--bad); }
+  .submit { margin-top:28px; border-top:1px solid var(--line); padding-top:18px; }
+  .submit h3 { margin:0 0 10px; font-size:15px; }
+  .submit label { display:block; font-size:12px; color:var(--muted); margin:8px 0 4px; }
+  .submit textarea, .submit input { width:100%; padding:9px 11px; border-radius:8px;
+         border:1px solid var(--line); background:#0c111b; color:var(--text); font:inherit; }
+  .submit textarea { min-height:90px; resize:vertical; }
+</style>
+</head>
+<body>
+  <header>
+    <b>KAI</b><span class="tag">Inform review · approve curated answers before they enter the KB</span>
+    <a href="index.html">← chat</a>
+    <span style="flex:1"></span>
+    <input id="api" class="cfg" placeholder="API base URL" autocomplete="off" />
+    <input id="key" class="cfg key" placeholder="API key (if set)" autocomplete="off" />
+  </header>
+  <main>
+    <div class="toolbar">
+      <label>Status
+        <select id="status">
+          <option value="pending" selected>pending</option>
+          <option value="approved">approved</option>
+          <option value="rejected">rejected</option>
+          <option value="revoked">revoked</option>
+          <option value="quarantined">quarantined</option>
+          <option value="all">all</option>
+        </select>
+      </label>
+      <button type="button" id="reload">Reload</button>
+      <span id="count" class="meta"></span>
+    </div>
+    <div id="list"><div class="empty">Loading…</div></div>
+
+    <div class="submit">
+      <h3>Submit a curated answer</h3>
+      <label for="sq">Question</label>
+      <textarea id="sq" placeholder="The gap question"></textarea>
+      <label for="sa">Answer</label>
+      <textarea id="sa" placeholder="Grounded answer to index after approval"></textarea>
+      <label for="sauthor">Author</label>
+      <input id="sauthor" class="inp" placeholder="your name / email" />
+      <label for="sasker">Asker (optional, DMed on approval)</label>
+      <input id="sasker" class="inp" placeholder="email or Slack user id" />
+      <div class="actions">
+        <button type="button" id="submit" class="ok">Queue for review</button>
+        <span id="submitMsg" class="meta"></span>
+      </div>
+    </div>
+  </main>
+<script>
+const apiInput = document.getElementById('api'), keyInput = document.getElementById('key'),
+      statusSel = document.getElementById('status'), list = document.getElementById('list'),
+      countEl = document.getElementById('count');
+
+const DEFAULT_API = 'http://localhost:8100';
+apiInput.value = localStorage.getItem('kai_api') ?? DEFAULT_API;
+keyInput.value = localStorage.getItem('kai_key') || '';
+apiInput.onchange = () => localStorage.setItem('kai_api', apiInput.value.trim());
+keyInput.onchange = () => localStorage.setItem('kai_key', keyInput.value.trim());
+const apiBase = () => (apiInput.value.trim().replace(/\/$/, ''));
+const headers = () => {
+  const h = { 'Content-Type': 'application/json' };
+  const k = keyInput.value.trim();
+  if (k) h['Authorization'] = 'Bearer ' + k;
+  return h;
+};
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+async function load() {
+  list.innerHTML = '<div class="empty">Loading…</div>';
+  countEl.textContent = '';
+  try {
+    const st = statusSel.value;
+    const r = await fetch(apiBase() + '/admin/inform?status=' + encodeURIComponent(st) + '&limit=100',
+      { headers: headers() });
+    if (!r.ok) throw new Error(r.status + ' ' + (await r.text()).slice(0, 200));
+    const data = await r.json();
+    const cands = data.candidates || [];
+    countEl.textContent = cands.length + ' candidate(s)';
+    if (!cands.length) {
+      list.innerHTML = '<div class="empty">No candidates for this status.</div>';
+      return;
+    }
+    list.innerHTML = cands.map(c => {
+      const id = c.id;
+      const canAct = (c.status || '') === 'pending';
+      const canRevoke = (c.status || '') === 'approved';
+      return `<div class="card" data-id="${id}">
+        <div class="meta"><span class="pill ${esc(c.status)}">${esc(c.status)}</span>
+          <span>#${id}</span>
+          ${c.author ? '<span>author: ' + esc(c.author) + '</span>' : ''}
+          ${c.asker ? '<span>asker: ' + esc(c.asker) + '</span>' : ''}
+          ${c.created_at ? '<span>' + esc(c.created_at) + '</span>' : ''}
+        </div>
+        <div class="q">${esc(c.question)}</div>
+        <div class="a">${esc(c.answer)}</div>
+        <div class="actions">
+          ${canAct ? `<input class="cfg sm approver" placeholder="approver" data-id="${id}" />
+            <button type="button" class="ok" data-act="approve" data-id="${id}">Approve</button>
+            <button type="button" class="bad" data-act="reject" data-id="${id}">Reject</button>` : ''}
+          ${canRevoke ? `<button type="button" class="ghost" data-act="revoke" data-id="${id}">Revoke</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    list.innerHTML = '<div class="err">Failed to load: ' + esc(e.message || e) + '</div>';
+  }
+}
+
+list.addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('button[data-act]');
+  if (!btn) return;
+  const id = btn.getAttribute('data-id');
+  const act = btn.getAttribute('data-act');
+  btn.disabled = true;
+  try {
+    let url = apiBase() + '/admin/inform/' + id + '/' + act;
+    const opts = { method: 'POST', headers: headers() };
+    if (act === 'approve') {
+      const inp = list.querySelector('input.approver[data-id="' + id + '"]');
+      opts.body = JSON.stringify({ approver: (inp && inp.value.trim()) || '' });
+    }
+    const r = await fetch(url, opts);
+    if (!r.ok) throw new Error(r.status + ' ' + (await r.text()).slice(0, 200));
+    await load();
+  } catch (e) {
+    alert('Action failed: ' + (e.message || e));
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('reload').onclick = load;
+statusSel.onchange = load;
+
+document.getElementById('submit').onclick = async () => {
+  const msg = document.getElementById('submitMsg');
+  const body = {
+    question: document.getElementById('sq').value.trim(),
+    answer: document.getElementById('sa').value.trim(),
+    author: document.getElementById('sauthor').value.trim(),
+    asker: document.getElementById('sasker').value.trim(),
+  };
+  if (body.question.length < 3 || !body.answer) {
+    msg.textContent = 'Question (≥3 chars) and answer are required.';
+    return;
+  }
+  msg.textContent = 'Submitting…';
+  try {
+    const r = await fetch(apiBase() + '/admin/inform', {
+      method: 'POST', headers: headers(), body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error(r.status + ' ' + (await r.text()).slice(0, 200));
+    const data = await r.json();
+    msg.textContent = 'Queued as #' + data.id;
+    document.getElementById('sq').value = '';
+    document.getElementById('sa').value = '';
+    statusSel.value = 'pending';
+    await load();
+  } catch (e) {
+    msg.textContent = 'Failed: ' + (e.message || e);
+  }
+};
+
+load();
+</script>
+</body>
+</html>

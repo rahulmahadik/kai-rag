@@ -22,6 +22,9 @@ oauth_config:
       - app_mentions:read   # receive @mentions
       - chat:write          # post answers
       - im:history          # read DM contents (ask in a 1:1)
+      - files:read          # download attached files for /ask-document
+      - im:write            # open a DM for /notify
+      - users:read.email    # optional: resolve email → user id for /notify
 settings:
   event_subscriptions:
     bot_events:

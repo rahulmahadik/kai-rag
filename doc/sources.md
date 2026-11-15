@@ -10,12 +10,19 @@ source, Confluence, files, or a future connector.
 ```dotenv
 SOURCE_TYPE=confluence          # default: a Confluence space
 SOURCE_TYPE=files               # local files under SOURCE_DIR
+SOURCE_TYPE=urls                # HTTP pages listed in SOURCE_URLS / SOURCE_SITEMAP
 SOURCE_TYPE=confluence+files    # both, ingested together (alias: "both")
+SOURCE_TYPE=files+urls          # any '+' combination works
 
 SOURCE_DIR=/path/to/docs        # required when SOURCE_TYPE includes files
+SOURCE_URLS=https://docs.example.com/a,https://docs.example.com/b
+SOURCE_SITEMAP=https://docs.example.com/sitemap.xml
+SOURCE_URL_MAX_PAGES=100        # hard cap per ingest
 ```
 
 Then ingest as usual: `python run/setup.py ingest` (or `POST /ingest`).
+For periodic refresh, `python run/setup.py schedule-ingest` prints cron /
+systemd timer snippets (KAI does not ship a built-in scheduler daemon).
 
 ## Multiple sources
 

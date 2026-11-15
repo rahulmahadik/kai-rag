@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.2.0
+
+Product release: more ways to escalate, ingest, notify, and curate, without
+changing the never-fabricate answer contract.
+
+### Added
+- **GitHub Issues tracker.** Set `GITHUB_TOKEN` + `GITHUB_REPO` (`owner/name`) to
+  file escalations as GitHub Issues (Enterprise via `GITHUB_API_URL`). Jira still
+  wins when fully configured; otherwise GitHub; otherwise local log.
+- **URL / sitemap knowledge source.** `SOURCE_TYPE=urls` (or `…+urls`) with
+  `SOURCE_URLS` and/or `SOURCE_SITEMAP`, capped by `SOURCE_URL_MAX_PAGES`.
+- **Slack and Teams allowlists.** `SLACK_APPROVED_USERS` and `TEAMS_APPROVED_USERS`
+  mirror Webex's allowlist pattern (blank = anyone who can reach the bot).
+- **File attachments on Slack and Teams.** Attached files run through
+  `/ask-document` (same ad-hoc path as Webex and the web UI). Slack needs
+  `files:read`; Teams uses `contentUrl` when the activity carries it.
+- **Cross-platform `/notify`.** Proactive DM on Webex or Slack (selected by
+  `CHAT_PLATFORM`). Body accepts `recipient` (preferred) or legacy `email`.
+  Inform approval DMs the asker on the active platform. Teams cold-DM stays
+  unsupported (needs a stored conversation reference).
+- **Inform review UI.** `frontend/admin.html` lists pending candidates and
+  supports approve / reject / revoke / submit (same `/admin/inform*` API).
+- **Scheduled ingest helper.** `python run/setup.py schedule-ingest` prints cron
+  and systemd timer snippets that call the existing ingest command.
+
+### Changed
+- Version bumped to **1.2.0**. Slack manifest scopes include `files:read`,
+  `im:write`, and `users:read.email` for attachment download and notify-by-email.
+
 ## 1.1.1
 
 Maintenance release: dependency floors raised against a green suite, public docs

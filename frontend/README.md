@@ -1,10 +1,14 @@
 # KAI web frontend
 
-A tiny, dependency-free web chat UI for KAI. It is a **separate** static app, it
-does not run inside the backend; it just calls the KAI HTTP API (`POST /ask`, and
-`POST /ask-document` when you attach a file) over CORS. One file, no build step, no
-framework. Attaching a file (📎) runs ad-hoc Q&A over **that file only**. It is
-read for that one question and never saved to the knowledge base.
+A tiny, dependency-free web UI for KAI. It is a **separate** static app, it does
+not run inside the backend; it just calls the KAI HTTP API over CORS. No build
+step, no framework.
+
+- `index.html`, chat (`POST /ask`, and `POST /ask-document` when you attach a
+  file). Attaching a file (📎) runs ad-hoc Q&A over **that file only**; it is
+  never saved to the knowledge base.
+- `admin.html`, Inform review: list / approve / reject / revoke / submit
+  curated answers via `/admin/inform*`.
 
 ## Run it
 

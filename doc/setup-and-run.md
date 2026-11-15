@@ -83,7 +83,9 @@ python run/setup.py start       # starts the API on http://127.0.0.1:8100
 python run/setup.py ingest      # fetches + indexes the configured Confluence space
 ```
 
-`ingest` prints how many chunks were written (e.g. `{"ingested": 308}`). Re-run
+`ingest` prints how many chunks were written (e.g. `{"ingested": 308}`). For a
+periodic refresh, `python run/setup.py schedule-ingest` prints cron / systemd
+timer snippets (there is no built-in scheduler daemon). Re-run
 it whenever the source content changes.
 
 ---
