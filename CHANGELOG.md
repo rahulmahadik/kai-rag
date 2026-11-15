@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.11
+
+- `doctor` reads Postgres credentials from `DATABASE_URL` / `.env` (no more false
+  UNREACHABLE when only the URL has the real password) and checks that
+  `LLM_MODEL` is actually present in Ollama before you hit a 404 on `/ask`.
+
 ## 1.2.10
 
 ### Fixed

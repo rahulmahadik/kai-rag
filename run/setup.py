@@ -38,6 +38,7 @@ import sys
 import time
 from pathlib import Path
 from urllib import request as _req
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent.parent
 VENV = ROOT / ".venv"
@@ -94,15 +95,59 @@ def info(m: str) -> None:
     print(f"  {m}")
 
 
+def _resolve_pg() -> tuple[str, str, str, str, str]:
+    """host, port, user, password, db — env wins, else DATABASE_URL from env/.env.
+
+    Doctor/install used to hard-default ``postgres/postgres``, which false-reports
+    UNREACHABLE when only ``DATABASE_URL`` in ``.env`` has the real password.
+    """
+
+    host = os.environ.get("PGHOST") or ""
+    port = os.environ.get("PGPORT") or ""
+    user = os.environ.get("PGUSER") or ""
+    password = os.environ.get("PGPASSWORD") or ""
+    db = os.environ.get("KAI_DB") or ""
+    url = (os.environ.get("DATABASE_URL") or _env_file_get("DATABASE_URL") or "").strip()
+    if url:
+        u = urlparse(url)
+        host = host or (u.hostname or "")
+        port = port or (str(u.port) if u.port else "")
+        user = user or (u.username or "")
+        password = password or (u.password or "")
+        if not db and u.path and u.path != "/":
+            db = u.path.lstrip("/").split("?", 1)[0]
+    return (
+        host or PGHOST,
+        port or PGPORT,
+        user or PGUSER,
+        password or PGPASSWORD,
+        db or KAI_DB,
+    )
+
+
 def _pg_env() -> dict:
+    _host, _port, _user, password, _db = _resolve_pg()
     e = dict(os.environ)
-    e["PGPASSWORD"] = PGPASSWORD
+    e["PGPASSWORD"] = password
     return e
 
 
-def psql(sql: str, db: str = "postgres") -> subprocess.CompletedProcess:
+def psql(sql: str, db: str | None = None) -> subprocess.CompletedProcess:
+    host, port, user, _password, _kai_db = _resolve_pg()
     return subprocess.run(
-        ["psql", "-h", PGHOST, "-p", PGPORT, "-U", PGUSER, "-d", db, "-tAc", sql],
+        [
+            "psql",
+            "-h",
+            host,
+            "-p",
+            port,
+            "-U",
+            user,
+            "-d",
+            db if db is not None else "postgres",
+            "-tAc",
+            sql,
+        ],
         env=_pg_env(),
         capture_output=True,
         text=True,
@@ -164,21 +209,22 @@ def _ensure_env() -> None:
 
 
 def _ensure_db() -> None:
+    host, port, user, _pw, kai_db = _resolve_pg()
     probe = psql("SELECT 1")
     if probe.returncode != 0:
-        err(f"Postgres not reachable at {PGUSER}@{PGHOST}:{PGPORT}, start it, then re-run.")
+        err(f"Postgres not reachable at {user}@{host}:{port}, start it, then re-run.")
         return
-    exists = psql(f"SELECT 1 FROM pg_database WHERE datname='{KAI_DB}'").stdout.strip() == "1"
+    exists = psql(f"SELECT 1 FROM pg_database WHERE datname='{kai_db}'").stdout.strip() == "1"
     if exists:
-        ok(f"database '{KAI_DB}' exists")
+        ok(f"database '{kai_db}' exists")
     else:
         subprocess.run(
-            ["createdb", "-h", PGHOST, "-p", PGPORT, "-U", PGUSER, KAI_DB],
+            ["createdb", "-h", host, "-p", port, "-U", user, kai_db],
             env=_pg_env(),
             check=False,
         )
-        ok(f"database '{KAI_DB}' created")
-    psql("CREATE EXTENSION IF NOT EXISTS vector", db=KAI_DB)
+        ok(f"database '{kai_db}' created")
+    psql("CREATE EXTENSION IF NOT EXISTS vector", db=kai_db)
     ok("pgvector extension ensured")
 
 
@@ -270,16 +316,17 @@ def do_status() -> None:
 def do_reset_db() -> None:
     print("KAI reset-db (drops the ENTIRE KAI database, index, curated answers, telemetry)")
     do_stop()
+    host, port, user, _pw, kai_db = _resolve_pg()
     subprocess.run(
-        ["dropdb", "-h", PGHOST, "-p", PGPORT, "-U", PGUSER, "--if-exists", KAI_DB],
+        ["dropdb", "-h", host, "-p", port, "-U", user, "--if-exists", kai_db],
         env=_pg_env(),
         check=False,
     )
     subprocess.run(
-        ["createdb", "-h", PGHOST, "-p", PGPORT, "-U", PGUSER, KAI_DB], env=_pg_env(), check=False
+        ["createdb", "-h", host, "-p", port, "-U", user, kai_db], env=_pg_env(), check=False
     )
-    psql("CREATE EXTENSION IF NOT EXISTS vector", db=KAI_DB)
-    ok(f"database '{KAI_DB}' reset")
+    psql("CREATE EXTENSION IF NOT EXISTS vector", db=kai_db)
+    ok(f"database '{kai_db}' reset")
 
 
 def do_ingest() -> None:
@@ -327,22 +374,38 @@ def do_doctor() -> None:
         (ok if r.returncode == 0 else err)(
             "python deps " + ("importable" if r.returncode == 0 else "MISSING (run install)")
         )
+    host, port, user, _pw, kai_db = _resolve_pg()
     pr = psql("SELECT 1")
     (ok if pr.returncode == 0 else err)(
-        f"postgres {PGUSER}@{PGHOST}:{PGPORT} "
-        + ("reachable" if pr.returncode == 0 else "UNREACHABLE")
+        f"postgres {user}@{host}:{port} " + ("reachable" if pr.returncode == 0 else "UNREACHABLE")
     )
     if pr.returncode == 0:
         ev = psql("SELECT 1 FROM pg_available_extensions WHERE name='vector'").stdout.strip()
         (ok if ev == "1" else err)("pgvector " + ("available" if ev == "1" else "NOT available"))
-        dv = psql(f"SELECT 1 FROM pg_database WHERE datname='{KAI_DB}'").stdout.strip()
+        dv = psql(f"SELECT 1 FROM pg_database WHERE datname='{kai_db}'").stdout.strip()
         (ok if dv == "1" else err)(
-            f"database '{KAI_DB}' " + ("exists" if dv == "1" else "missing (run install)")
+            f"database '{kai_db}' " + ("exists" if dv == "1" else "missing (run install)")
         )
     try:
         with _req.urlopen("http://localhost:11434/api/tags", timeout=3) as r:
-            n = len(json.loads(r.read()).get("models", []))
-            ok(f"ollama up on :11434 ({n} models), for real local LLM/embeddings")
+            tags = json.loads(r.read())
+            names = [m.get("name") or "" for m in tags.get("models", [])]
+            ok(f"ollama up on :11434 ({len(names)} models), for real local LLM/embeddings")
+        llm_model = os.environ.get("LLM_MODEL") or _env_file_get("LLM_MODEL") or ""
+        if llm_model:
+            # Ollama tags often append :latest; accept either form.
+            present = llm_model in names or f"{llm_model}:latest" in names
+            if not present and ":" not in llm_model:
+                present = any(
+                    n == f"{llm_model}:latest" or n.startswith(f"{llm_model}:") for n in names
+                )
+            if present:
+                ok(f"ollama has LLM_MODEL={llm_model}")
+            else:
+                err(
+                    f"ollama missing LLM_MODEL={llm_model} "
+                    f"(pull it, or set LLM_MODEL to one of: {', '.join(names[:8]) or '—'})"
+                )
         # Tags alone are not enough: Metal/GPU failures still list models but
         # crash on load. Probe a real embedding when EMBED_* points at Ollama.
         embed_model = (
