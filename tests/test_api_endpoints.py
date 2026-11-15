@@ -102,6 +102,107 @@ def test_escalate_files_ticket_without_rerunning_ask(client):
     assert r.json()["escalation_url"] == "http://jira/KAI-9"
 
 
+def test_ask_escalation_triggers_notify_routes(monkeypatch):
+    monkeypatch.setattr(app_module, "build_providers", _fake_providers)
+    monkeypatch.setattr(
+        app_module,
+        "ask_pipeline",
+        lambda q, p, s, **_k: _answer(
+            answer="flagged",
+            escalated=True,
+            escalation_url="http://jira/KAI-9",
+            citations=[],
+            suggested_sources=[Citation(title="Eng", url="http://kb/e", space="ENG")],
+            confidence=0.1,
+        ),
+    )
+    seen: dict = {}
+
+    def _notify(settings, recipient, message):
+        seen["to"] = recipient
+        return True, "sent"
+
+    monkeypatch.setattr("kai.chat.notify.notify_user", _notify)
+    s = Settings(
+        _env_file=None,
+        KAI_API_KEY="sekret",
+        reranker="noop",
+        database_url="",
+        answer_cache_size=0,
+        notify_routes="ENG:alice@acme.com;*:ops@acme.com",
+    )
+    c = TestClient(app_module.create_app(s), raise_server_exceptions=False)
+    r = c.post("/ask", json={"question": "unknown topic"}, headers=AUTH)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["escalated"] is True
+    assert body["escalation_notified"] is True
+    assert body["escalation_notified_to"] == "alice@acme.com"
+    assert seen["to"] == "alice@acme.com"
+
+
+def test_escalate_endpoint_uses_default_notify_route(monkeypatch):
+    monkeypatch.setattr(app_module, "build_providers", _fake_providers)
+    seen: dict = {}
+    monkeypatch.setattr(
+        "kai.chat.notify.notify_user",
+        lambda settings, recipient, message: seen.update(to=recipient) or (True, "sent"),
+    )
+    s = Settings(
+        _env_file=None,
+        KAI_API_KEY="sekret",
+        reranker="noop",
+        database_url="",
+        answer_cache_size=0,
+        notify_routes="*:oncall@acme.com",
+    )
+    c = TestClient(app_module.create_app(s), raise_server_exceptions=False)
+    r = c.post("/escalate", json={"question": "help", "reporter": "u"}, headers=AUTH)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["escalation_notified"] is True
+    assert body["escalation_notified_to"] == "oncall@acme.com"
+    assert seen["to"] == "oncall@acme.com"
+
+
+def test_ask_escalation_notify_falls_back_to_request_spaces(monkeypatch):
+    monkeypatch.setattr(app_module, "build_providers", _fake_providers)
+    monkeypatch.setattr(
+        app_module,
+        "ask_pipeline",
+        lambda q, p, s, **_k: _answer(
+            answer="flagged",
+            escalated=True,
+            escalation_url=None,
+            citations=[],
+            suggested_sources=[],  # no space tags on citations
+            confidence=0.1,
+        ),
+    )
+    seen: dict = {}
+    monkeypatch.setattr(
+        "kai.chat.notify.notify_user",
+        lambda settings, recipient, message: seen.update(to=recipient) or (True, "sent"),
+    )
+    s = Settings(
+        _env_file=None,
+        KAI_API_KEY="sekret",
+        reranker="noop",
+        database_url="",
+        answer_cache_size=0,
+        notify_routes="OPS:ops-bot@acme.com",
+    )
+    c = TestClient(app_module.create_app(s), raise_server_exceptions=False)
+    r = c.post(
+        "/ask",
+        json={"question": "ops question", "spaces": ["OPS"]},
+        headers=AUTH,
+    )
+    assert r.status_code == 200
+    assert r.json()["escalation_notified"] is True
+    assert seen["to"] == "ops-bot@acme.com"
+
+
 def test_metrics_exposed_as_text(client):
     client.post("/ask", json={"question": "warm the counters"}, headers=AUTH)
     r = client.get("/metrics", headers=AUTH)  # /metrics is auth-gated when a key is set

@@ -257,6 +257,40 @@ def test_notify_slack_rejects_opaque_non_id() -> None:
     assert not ok and "user id" in detail
 
 
+def test_notify_slack_empty_channel_and_generic_error(monkeypatch) -> None:
+    class _Client:
+        def __init__(self, token):
+            pass
+
+        def conversations_open(self, users):
+            if users == "Uempty":
+                return {"channel": {}}
+            raise RuntimeError("network")
+
+        def chat_postMessage(self, channel, text):
+            return {"ok": True}
+
+    sdk = types.ModuleType("slack_sdk")
+    sdk.WebClient = _Client
+    err = types.ModuleType("slack_sdk.errors")
+
+    class _SlackApiError(Exception):
+        response = None
+
+    err.SlackApiError = _SlackApiError
+    monkeypatch.setitem(sys.modules, "slack_sdk", sdk)
+    monkeypatch.setitem(sys.modules, "slack_sdk.errors", err)
+
+    ok, detail = notify_user(
+        _settings(chat_platform="slack", slack_bot_token="xoxb-t"), "Uempty", "hi"
+    )
+    assert not ok and "DM channel" in detail
+    ok, detail = notify_user(
+        _settings(chat_platform="slack", slack_bot_token="xoxb-t"), "Uboom", "hi"
+    )
+    assert not ok and detail == "RuntimeError"
+
+
 def test_parse_and_resolve_notify_routes() -> None:
     routes = parse_notify_routes("ENG:alice@acme.com;OPS:U123;*:oncall@acme.com")
     assert routes["eng"] == "alice@acme.com"
@@ -264,6 +298,29 @@ def test_parse_and_resolve_notify_routes() -> None:
     assert resolve_notify_recipient(routes, ["unknown"]) == "oncall@acme.com"
     assert resolve_notify_recipient({}, ["ENG"]) == ""
     assert parse_notify_routes("") == {}
+    # junk segments without ":" are skipped; empty key/value ignored
+    assert parse_notify_routes("ENG:a;nocolon;:novalue; : ;GOOD:b") == {
+        "eng": "a",
+        "good": "b",
+    }
+
+
+def test_notify_on_escalation_truncates_long_question(monkeypatch) -> None:
+    seen: dict = {}
+
+    def _fake(settings, recipient, message):
+        seen["msg"] = message
+        return True, "sent"
+
+    monkeypatch.setattr("kai.chat.notify.notify_user", _fake)
+    long_q = "word " * 80
+    ok, _ = notify_on_escalation(
+        _settings(notify_routes="*:ops@acme.com"), question=long_q, spaces=None
+    )
+    assert ok
+    # body after the header should be truncated with ellipsis
+    assert "..." in seen["msg"]
+    assert len(seen["msg"]) < len(long_q) + 80
 
 
 def test_notify_on_escalation_routes_and_skips(monkeypatch) -> None:
@@ -287,6 +344,15 @@ def test_notify_on_escalation_routes_and_skips(monkeypatch) -> None:
 
     ok, detail = notify_on_escalation(_settings(notify_routes=""), question="x", spaces=["ENG"])
     assert not ok and detail == "no route"
+
+    def _fail(settings, recipient, message):
+        return False, "WEBEX_BOT_TOKEN is not configured"
+
+    monkeypatch.setattr("kai.chat.notify.notify_user", _fail)
+    ok, detail = notify_on_escalation(
+        _settings(notify_routes="*:ops@acme.com"), question="y", spaces=None
+    )
+    assert not ok and "WEBEX_BOT_TOKEN" in detail
 
 
 # --- file download helpers ---

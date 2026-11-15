@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.9
+
+### Fixed
+- **CI coverage** for SMTP email escalation and `NOTIFY_ROUTES` paths (integration
+  job was failing under the 92% floor).
+
 ## 1.2.8
 
 ### Added

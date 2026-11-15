@@ -370,6 +370,88 @@ def test_email_tracker_needs_to_from_host() -> None:
         EmailTracker(_wiring_settings())
 
 
+def test_email_tracker_ssl_path_and_long_title(monkeypatch) -> None:
+    from kai.providers.email_tracker import EmailTracker
+
+    sent: dict = {}
+
+    class _SMTP_SSL:
+        def __init__(self, host, port, context=None, timeout=30):
+            sent["ssl"] = True
+            sent["host"] = host
+            sent["port"] = port
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def login(self, user, password):
+            sent["user"] = user
+
+        def send_message(self, msg):
+            sent["subject"] = msg["Subject"]
+
+    monkeypatch.setattr("kai.providers.email_tracker.smtplib.SMTP_SSL", _SMTP_SSL)
+    tracker = EmailTracker(
+        _wiring_settings(
+            escalation_email_to="ops@acme.com",
+            escalation_email_from="kai@acme.com",
+            escalation_smtp_host="smtp.acme.com",
+            escalation_smtp_port=465,
+            escalation_smtp_user="kai",
+            escalation_smtp_password="x",
+            escalation_smtp_ssl=True,
+            escalation_smtp_tls=False,
+        )
+    )
+    long_title = "KAI could not answer: " + ("word " * 80)
+    url = tracker.create_issue(long_title, "")
+    assert sent["ssl"] is True and sent["port"] == 465
+    assert sent["subject"].endswith("...")
+    assert len(sent["subject"]) <= 200
+    assert url.startswith("mailto:ops@acme.com")
+
+
+def test_email_tracker_skips_login_without_user(monkeypatch) -> None:
+    from kai.providers.email_tracker import EmailTracker
+
+    class _SMTP:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def ehlo(self):
+            pass
+
+        def starttls(self, context=None):
+            pass
+
+        def login(self, *a):
+            raise AssertionError("login must not run without a user")
+
+        def send_message(self, msg):
+            pass
+
+    monkeypatch.setattr("kai.providers.email_tracker.smtplib.SMTP", _SMTP)
+    tracker = EmailTracker(
+        _wiring_settings(
+            escalation_email_to="ops@acme.com",
+            escalation_email_from="kai@acme.com",
+            escalation_smtp_host="smtp.acme.com",
+            escalation_smtp_user="",
+            escalation_smtp_tls=True,
+        )
+    )
+    assert tracker.create_issue("", "body").startswith("mailto:")
+
+
 # ======================================================================= #
 # bot.run_bot
 # ======================================================================= #
