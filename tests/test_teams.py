@@ -68,3 +68,63 @@ def test_build_reply_activity_text_and_card():
 def test_build_chat_adapter_returns_teams():
     a = build_chat_adapter(Settings(_env_file=None, chat_platform="teams"))
     assert isinstance(a, TeamsAdapter) and a.name == "teams"
+
+
+def test_teams_webhook_allowlist_and_file_attach(monkeypatch):
+    """Capture the FastAPI app from run() and exercise allowlist + attachment paths."""
+
+    from fastapi.testclient import TestClient
+
+    captured: dict = {}
+
+    def _fake_uvicorn(app, **_kw):
+        captured["app"] = app
+
+    monkeypatch.setattr("uvicorn.run", _fake_uvicorn)
+    adapter = TeamsAdapter(
+        Settings(
+            _env_file=None,
+            kai_api_url="http://x",
+            teams_app_id="app",
+            teams_app_password="pw",
+            teams_approved_users="allowed-user",
+        )
+    )
+    monkeypatch.setattr(adapter, "_validate", lambda *a, **k: None)
+    replies: list = []
+    monkeypatch.setattr(adapter, "_reply", lambda act, text, card=None: replies.append(text))
+    adapter.run()
+    client = TestClient(captured["app"], raise_server_exceptions=False)
+
+    # Denied by allowlist.
+    r = client.post(
+        "/api/messages",
+        json={"type": "message", "text": "hello", "from": {"aadObjectId": "other"}},
+        headers={"Authorization": "Bearer x"},
+    )
+    assert r.status_code == 200
+    assert any("allowlist" in t.lower() for t in replies)
+
+    # Attachment → ask_document.
+    replies.clear()
+    monkeypatch.setattr(
+        "kai.chat.teams.teams_attachment_download",
+        lambda *a, **k: ("doc.pdf", b"%PDF"),
+    )
+    monkeypatch.setattr(
+        adapter._service,
+        "ask_document",
+        lambda name, data, q: ({"answer": "from file", "escalated": False}, ""),
+    )
+    r = client.post(
+        "/api/messages",
+        json={
+            "type": "message",
+            "text": "summarize",
+            "from": {"aadObjectId": "allowed-user"},
+            "attachments": [{"contentUrl": "https://ex/f", "name": "doc.pdf"}],
+        },
+        headers={"Authorization": "Bearer x"},
+    )
+    assert r.status_code == 200
+    assert any("doc.pdf" in t and "knowledge base" in t for t in replies)

@@ -195,6 +195,58 @@ def test_an_empty_message_is_ignored(running, monkeypatch) -> None:
     assert calls == [] and said == []
 
 
+def test_allowlist_denies_unknown_users(fake_slack, monkeypatch) -> None:
+    adapter = SlackAdapter(_settings(slack_approved_users="Uallowed"))
+    said: list[dict] = []
+    adapter.run()
+    app = fake_slack["app"]
+    calls: list = []
+    monkeypatch.setattr(adapter._service, "answer", lambda msg: calls.append(1) or ({}, ""))
+
+    app.events["app_mention"](
+        {"text": "q", "user": "Uother", "channel": "C1", "ts": "1"},
+        lambda **kw: said.append(kw),
+    )
+
+    assert calls == []
+    assert "allowlist" in said[0]["text"].lower()
+
+
+def test_file_attachment_routes_to_ask_document(running, monkeypatch) -> None:
+    adapter, app, said = running
+    monkeypatch.setattr(
+        "kai.chat.slack.slack_file_download",
+        lambda *a, **k: ("notes.pdf", b"%PDF"),
+    )
+    seen: list = []
+    monkeypatch.setattr(
+        adapter._service,
+        "ask_document",
+        lambda name, data, q: (
+            seen.append((name, data, q)),
+            ({"answer": "summary", "escalated": False}, ""),
+        )[1],
+    )
+    monkeypatch.setattr(
+        adapter._service, "answer", lambda msg: (_ for _ in ()).throw(AssertionError("no /ask"))
+    )
+
+    app.events["app_mention"](
+        {
+            "text": "<@U1> what is this?",
+            "user": "U1",
+            "channel": "C1",
+            "ts": "1",
+            "files": [{"id": "F1", "name": "notes.pdf", "url_private": "https://f"}],
+        },
+        lambda **kw: said.append(kw),
+    )
+
+    assert seen == [("notes.pdf", b"%PDF", "what is this?")]
+    assert "notes.pdf" in said[0]["text"]
+    assert "knowledge base" in said[0]["text"]
+
+
 def test_help_is_answered_locally(running, monkeypatch) -> None:
     adapter, app, said = running
     calls: list = []
