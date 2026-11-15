@@ -70,6 +70,12 @@ Very small models may escalate more or format citations less reliably.
 seconds); subsequent answers are faster, and identical questions are cached. The chat
 bots post an instant "🔎 Searching..." ack so it doesn't look frozen.
 
+**`/ask` returns 503 / doctor says embeddings FAILED?** Ollama is up but the model
+won't load. Common on macOS: Metal init fails (`device: (null)`, `failed to create
+command queue`) — restart Ollama from the desktop app (not a headless `ollama
+serve`), or run with CPU only (`OLLAMA_NUM_GPU=0`). Confirm with
+`python run/setup.py doctor` (it now probes a real embedding, not just `/api/tags`).
+
 ## Accuracy & the never-fabricate guarantee
 
 **How does KAI avoid hallucinations?** Layered: hybrid retrieval (dense + full-text,

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.10
+
+### Fixed
+- **Doctor probes a real embedding**, not just Ollama `/api/tags` (catches Metal
+  load crashes that still list models).
+- **`/ask` returns 503** (not a opaque 500) when embeddings/LLM are down, without
+  leaking endpoint URLs; embedder errors retain the upstream hint in server logs.
+- FAQ / setup troubleshooting for Ollama Metal `device: (null)` failures.
+
 ## 1.2.9
 
 ### Fixed

@@ -271,7 +271,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="KAI, Know · Ask · Inform",
         description=_description,
-        version="1.2.9",
+        version="1.2.10",
         openapi_tags=_tags_meta,
         contact={"name": "Rahul Mahadik", "url": "https://rahulmahadik.com"},
         license_info={
@@ -328,6 +328,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # log the real error server-side; return a generic message so we never
         # leak base URLs / space keys / project keys to the caller.
         logger.error("kai_unhandled path=%s err=%s", request.url.path, repr(exc))
+        # Upstream model endpoints are operator-actionable; surface a 503 without
+        # leaking hostnames/paths from the exception text.
+        msg = str(exc)
+        if isinstance(exc, RuntimeError) and (
+            "Embedding endpoint" in msg
+            or "Embedding request" in msg
+            or "Chat endpoint" in msg
+            or "Chat completion request" in msg
+        ):
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "detail": (
+                        "Model service unavailable (embeddings or LLM). "
+                        "Run `python run/setup.py doctor` and check EMBED_*/LLM_*."
+                    )
+                },
+            )
         return JSONResponse(
             status_code=500,
             content={"detail": "Internal error, please retry or contact an administrator."},

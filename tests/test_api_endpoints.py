@@ -85,6 +85,20 @@ def test_unhandled_error_returns_generic_500(monkeypatch, client):
     assert "secret-internal-url" not in r.text  # Q2: nothing internal leaks
 
 
+def test_embedding_outage_returns_503_without_leaking_url(monkeypatch, client):
+    def _boom(q, p, s, **_k):
+        raise RuntimeError(
+            "Embedding endpoint http://localhost:11434/v1/embeddings returned HTTP 500: "
+            "model failed to load"
+        )
+
+    monkeypatch.setattr(app_module, "ask_pipeline", _boom)
+    r = client.post("/ask", json={"question": "x"}, headers=AUTH)
+    assert r.status_code == 503
+    assert "11434" not in r.text
+    assert "Model service unavailable" in r.json()["detail"]
+
+
 def test_feedback_records(client):
     r = client.post(
         "/feedback",

@@ -160,6 +160,22 @@ class OpenAIEmbedder:
         if 400 <= resp.status_code < 500:
             return False, [], resp.status_code
         if resp.status_code != 200:
+            # Include a short upstream hint (e.g. Ollama "model failed to load")
+            # for server logs; the API maps this to a generic 503 for clients.
+            hint = ""
+            try:
+                err = (resp.json() or {}).get("error")
+                if isinstance(err, dict):
+                    hint = (err.get("message") or "").strip()
+                elif isinstance(err, str):
+                    hint = err.strip()
+            except ValueError:
+                hint = ""
+            if hint:
+                hint = hint.split("\n", 1)[0][:160]
+                raise RuntimeError(
+                    f"Embedding endpoint {url} returned HTTP {resp.status_code}: {hint}"
+                )
             raise RuntimeError(f"Embedding endpoint {url} returned HTTP {resp.status_code}.")
 
         try:

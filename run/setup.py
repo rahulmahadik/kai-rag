@@ -20,7 +20,8 @@ clashes with anything else running on this machine.
     python run/setup.py schedule-ingest   print a cron/systemd timer snippet for periodic ingest
 
 You still install the LLM/embedding models yourself (e.g. `ollama pull
-qwen2.5:14b-instruct && ollama pull nomic-embed-text`); `doctor` checks they're up.
+qwen2.5:14b-instruct && ollama pull nomic-embed-text`); `doctor` checks Ollama
+is up and that a probe embedding actually loads.
 
 Config (env overrides):
     KAI_PORT (default 8100)   KAI_HOST (default 127.0.0.1)   KAI_DB (default kai)
@@ -342,6 +343,40 @@ def do_doctor() -> None:
         with _req.urlopen("http://localhost:11434/api/tags", timeout=3) as r:
             n = len(json.loads(r.read()).get("models", []))
             ok(f"ollama up on :11434 ({n} models), for real local LLM/embeddings")
+        # Tags alone are not enough: Metal/GPU failures still list models but
+        # crash on load. Probe a real embedding when EMBED_* points at Ollama.
+        embed_model = (
+            os.environ.get("EMBED_MODEL") or _env_file_get("EMBED_MODEL") or "nomic-embed-text"
+        )
+        embed_base = (
+            os.environ.get("EMBED_BASE_URL")
+            or _env_file_get("EMBED_BASE_URL")
+            or "http://localhost:11434/v1"
+        ).rstrip("/")
+        if "11434" in embed_base or "ollama" in embed_base.lower():
+            probe = json.dumps({"model": embed_model, "input": "kai-doctor-probe"}).encode()
+            req = _req.Request(
+                f"{embed_base}/embeddings",
+                data=probe,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            try:
+                with _req.urlopen(req, timeout=60) as er:
+                    body = json.loads(er.read())
+                dims = len(((body.get("data") or [{}])[0]).get("embedding") or [])
+                if dims:
+                    ok(f"ollama embeddings load ({embed_model}, {dims}-dim)")
+                else:
+                    err(f"ollama embeddings returned no vector for {embed_model}")
+            except Exception as exc:  # noqa: BLE001 - doctor must never crash
+                err(
+                    f"ollama embeddings FAILED for {embed_model}: "
+                    f"{type(exc).__name__}. If logs show Metal "
+                    "'device: (null)' / 'failed to create command queue', "
+                    "restart Ollama from the desktop app (GPU) or force CPU "
+                    "(OLLAMA_NUM_GPU=0) and retry."
+                )
     except Exception:
         info("ollama not reachable on :11434 (only needed for real local models)")
     h = get_health()
@@ -388,17 +423,23 @@ def do_ui() -> None:
     )
 
 
+def _env_file_get(key: str) -> str:
+    """Read one KEY from ``.env`` (no export; ignores comments). Blank if missing."""
+
+    env_path = ROOT / ".env"
+    if not env_path.exists():
+        return ""
+    prefix = f"{key}="
+    for line in env_path.read_text().splitlines():
+        stripped = line.strip()
+        if stripped.startswith(prefix) and not stripped.startswith("#"):
+            return stripped.split("=", 1)[1].split(" #", 1)[0].strip().strip("\"'")
+    return ""
+
+
 def _configured_platform() -> str:
     """Best-effort CHAT_PLATFORM (env override, else .env) for an accurate banner."""
-    plat = os.environ.get("CHAT_PLATFORM", "").strip()
-    if not plat and (ROOT / ".env").exists():
-        for line in (ROOT / ".env").read_text().splitlines():
-            stripped = line.strip()
-            if stripped.startswith("CHAT_PLATFORM=") and not stripped.startswith("#"):
-                # strip an inline comment (the shipped .env.example uses one) then quotes
-                plat = stripped.split("=", 1)[1].split(" #", 1)[0].strip().strip("\"'")
-                break
-    return plat or "webex"
+    return os.environ.get("CHAT_PLATFORM", "").strip() or _env_file_get("CHAT_PLATFORM") or "webex"
 
 
 _BOT_TOKENS = {

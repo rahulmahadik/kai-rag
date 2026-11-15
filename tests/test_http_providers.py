@@ -258,6 +258,18 @@ def test_embedder_raises_on_a_5xx() -> None:
         _embedder(lambda r: httpx.Response(502)).embed(["a"])
 
 
+def test_embedder_5xx_includes_upstream_error_hint() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            500,
+            json={"error": {"message": "model failed to load, check ollama server logs"}},
+        )
+
+    with pytest.raises(RuntimeError, match="model failed to load") as exc:
+        _embedder(handler).embed(["a"])
+    assert "500" in str(exc.value)
+
+
 def test_embedder_raises_on_a_network_error() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ReadTimeout("slow")

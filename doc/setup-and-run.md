@@ -214,6 +214,7 @@ chunking; **`reset-db`**/**`fresh`** are destructive (clean-slate rebuild).
 |---|---|
 | `doctor` flags Postgres/pgvector | Ensure Postgres is running and the `pgvector` extension is installed. |
 | `doctor` flags Ollama | `ollama serve` and confirm the two models are pulled. |
+| `doctor` / `/ask` say embeddings FAILED / 503 | Ollama listed models but load crashed (often Metal `device: (null)`). Restart the **Ollama desktop app**, or `OLLAMA_NUM_GPU=0 ollama serve`, then re-run `doctor`. |
 | Bot exits asking for a token | Set `WEBEX_BOT_TOKEN` in `.env`. |
 | Bot can't reach the API | Run `python run/setup.py start` first; check `KAI_API_URL`. |
 | Answers look stale | Re-run `python run/setup.py ingest` after the source changes. |
