@@ -250,7 +250,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="KAI, Know · Ask · Inform",
         description=_description,
-        version="1.2.1",
+        version="1.2.2",
         openapi_tags=_tags_meta,
         contact={"name": "Rahul Mahadik", "url": "https://rahulmahadik.com"},
         license_info={
@@ -555,7 +555,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             client_err = (
                 "not configured" in detail
                 or "needs:" in detail
-                or detail.startswith("Teams proactive")
                 or "must be a user id" in detail
                 or "recipient and message" in detail
             )

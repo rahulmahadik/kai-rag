@@ -65,9 +65,99 @@ def test_notify_slack_needs_token() -> None:
     assert not ok and "SLACK_BOT_TOKEN" in detail
 
 
-def test_notify_teams_is_unsupported() -> None:
-    ok, detail = notify_user(_settings(chat_platform="teams"), "x", "hi")
-    assert not ok and "Teams" in detail
+def test_notify_teams_needs_credentials_and_db() -> None:
+    ok, detail = notify_user(_settings(chat_platform="teams"), "user-1", "hi")
+    assert not ok
+    assert "DATABASE_URL" in detail or "TEAMS_APP" in detail
+
+
+def test_teams_conversation_ref_from_activity() -> None:
+    from kai.chat.teams_refs import conversation_ref_from_activity
+
+    ref = conversation_ref_from_activity(
+        {
+            "serviceUrl": "https://smba.trafficmanager.net/apis/",
+            "from": {"id": "29:user", "aadObjectId": "aad-1"},
+            "recipient": {"id": "28:bot"},
+            "conversation": {"id": "a:1", "tenantId": "tid"},
+        }
+    )
+    assert ref is not None
+    assert ref.user_key == "aad-1"
+    assert ref.conversation_id == "a:1"
+    assert ref.bot_id == "28:bot"
+    assert conversation_ref_from_activity({"type": "message"}) is None
+
+
+def test_send_teams_proactive_uses_stored_ref(monkeypatch) -> None:
+    from kai.chat import teams_refs
+
+    class _Store:
+        def __init__(self, db):
+            pass
+
+        def get(self, key):
+            assert key == "aad-1"
+            return teams_refs.TeamsConversationRef(
+                user_key="aad-1",
+                service_url="https://smba.example/apis",
+                conversation_id="a:1",
+                bot_id="28:bot",
+                user_id="29:user",
+                tenant_id="tid",
+            )
+
+    posts: list = []
+
+    class _Resp:
+        status_code = 201
+        text = ""
+
+    monkeypatch.setattr(teams_refs, "TeamsConversationStore", _Store)
+    monkeypatch.setattr(teams_refs, "_connector_token", lambda s: "tok")
+    monkeypatch.setattr(
+        teams_refs.httpx,
+        "post",
+        lambda url, headers=None, json=None, timeout=None: posts.append((url, json)) or _Resp(),
+    )
+
+    ok, detail = notify_user(
+        _settings(
+            chat_platform="teams",
+            database_url="postgresql://u@localhost/kai",
+            teams_app_id="app",
+            teams_app_password="pw",
+        ),
+        "aad-1",
+        "your question is answered",
+    )
+    assert ok and detail == "sent"
+    assert posts and "a:1" in posts[0][0]
+    assert posts[0][1]["text"] == "your question is answered"
+
+
+def test_send_teams_proactive_missing_ref(monkeypatch) -> None:
+    from kai.chat import teams_refs
+
+    class _Store:
+        def __init__(self, db):
+            pass
+
+        def get(self, key):
+            return None
+
+    monkeypatch.setattr(teams_refs, "TeamsConversationStore", _Store)
+    ok, detail = notify_user(
+        _settings(
+            chat_platform="teams",
+            database_url="postgresql://u@localhost/kai",
+            teams_app_id="app",
+            teams_app_password="pw",
+        ),
+        "aad-missing",
+        "hi",
+    )
+    assert not ok and "message the bot" in detail
 
 
 def test_notify_webex_delegates_to_send_dm(monkeypatch) -> None:

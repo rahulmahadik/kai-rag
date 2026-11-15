@@ -66,9 +66,11 @@ DM are the sanctioned substitutes.
   Overflow pieces + the feedback card post as in-thread follow-ups (a card-bearing
   message can't be edited). Falls back to a normal reply if the REST edit fails.
 * **Proactive DM**, `POST /notify {recipient|email, message}` (API, auth-gated)
-  DMs a user on Webex or Slack (`CHAT_PLATFORM`). Inform approval calls this
-  automatically. Webex: recipient must have messaged the bot before. Slack:
-  user id or email (`users:read.email`). Teams cold-DM is not supported.
+  DMs a user on Webex, Slack, or Teams (`CHAT_PLATFORM`). Inform approval calls
+  this automatically. Webex: recipient must have messaged the bot before. Slack:
+  user id or email (`users:read.email`). Teams: stores a conversation reference
+  when the user messages the bot, then posts proactively to that conversation
+  (prefer a 1:1 DM with the bot so the notify stays private).
 * **Conversation memory** (`CONVERSATION_MEMORY=true`, EXPERIMENTAL, default off)
   prepends the last question's topic to a referential follow-up ("what about X?")
   so it retrieves in context. The enriched query still runs the FULL gate + guards,

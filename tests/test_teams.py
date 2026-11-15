@@ -70,6 +70,52 @@ def test_build_chat_adapter_returns_teams():
     assert isinstance(a, TeamsAdapter) and a.name == "teams"
 
 
+def test_teams_webhook_remembers_conversation(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    captured: dict = {}
+    remembered: list = []
+
+    def _fake_uvicorn(app, **_kw):
+        captured["app"] = app
+
+    monkeypatch.setattr("uvicorn.run", _fake_uvicorn)
+    monkeypatch.setattr(
+        "kai.chat.teams_refs.TeamsConversationStore.remember",
+        lambda self, act: remembered.append(act) or True,
+    )
+    adapter = TeamsAdapter(
+        Settings(
+            _env_file=None,
+            kai_api_url="http://x",
+            teams_app_id="app",
+            teams_app_password="pw",
+            database_url="postgresql://u@localhost/kai",
+        )
+    )
+    monkeypatch.setattr(adapter, "_validate", lambda *a, **k: None)
+    monkeypatch.setattr(adapter, "_reply", lambda *a, **k: None)
+    monkeypatch.setattr(
+        adapter._service, "answer", lambda msg: ({"answer": "ok", "escalated": False}, "")
+    )
+    adapter.run()
+    client = TestClient(captured["app"], raise_server_exceptions=False)
+    r = client.post(
+        "/api/messages",
+        json={
+            "type": "message",
+            "text": "hello",
+            "serviceUrl": "https://smba.example/",
+            "from": {"id": "29:u", "aadObjectId": "aad"},
+            "recipient": {"id": "28:bot"},
+            "conversation": {"id": "a:1"},
+        },
+        headers={"Authorization": "Bearer x"},
+    )
+    assert r.status_code == 200
+    assert remembered and remembered[0]["conversation"]["id"] == "a:1"
+
+
 def test_teams_webhook_allowlist_and_file_attach(monkeypatch):
     """Capture the FastAPI app from run() and exercise allowlist + attachment paths."""
 

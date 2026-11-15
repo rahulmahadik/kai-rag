@@ -19,7 +19,8 @@ today. This page records what ships now and what's planned next. Contributions w
   bots (Teams: verify in your Azure tenant). Allowlists and file attachments on
   all three platforms.
 - **Escalation**, opens a **Jira** or **GitHub Issues** ticket on low-confidence
-  questions, and can **proactively DM** on Webex or Slack (`/notify`).
+  questions, and can **proactively DM** on Webex, Slack, or Teams (`/notify`;
+  Teams uses a stored conversation reference after the user messages the bot).
 - **Learning loop**, approval-gated curated answers (API + `frontend/admin.html`),
   with an audit trail and 👎-driven auto-removal; observability via `/metrics`
   and `/admin/gaps`.
@@ -40,8 +41,8 @@ today. This page records what ships now and what's planned next. Contributions w
 
 ### Escalation & notifications, *raise a ticket / page a person*
 - Trackers beyond Jira/GitHub: ServiceNow, Linear, GitLab, or plain email.
-- Teams proactive DM (stored conversation reference) and topic/space-based
-  routing with acknowledgement.
+- Topic/space-based notify routing with acknowledgement; richer Teams
+  conversation creation (open a fresh 1:1 when only a channel ref exists).
 - Escalation templates and auto-assignment by subject area.
 
 ### Answering & UX

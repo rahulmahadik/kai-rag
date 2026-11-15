@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.2
+
+### Added
+- **Teams proactive DM.** The Teams adapter stores a conversation reference when
+  a user messages the bot; `POST /notify` and Inform approval can then DM that
+  user via the Bot Connector (recipient = AAD object id / user id). Cold-open
+  without a prior message is still impossible on Bot Framework.
+
 ## 1.2.1
 
 ### Added

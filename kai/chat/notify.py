@@ -1,8 +1,8 @@
-"""Proactive DM helpers for Webex and Slack.
+"""Proactive DM helpers for Webex, Slack, and Teams.
 
 Used by ``POST /notify`` and the Inform-approve close-the-loop path.
-Teams proactive DM needs a stored conversation reference and is not supported
-cold; the endpoint returns a clear error for that platform.
+Teams needs a previously stored conversation reference (saved when the user
+messages the bot); cold-open from only a user id is not supported by Bot Framework.
 """
 
 from __future__ import annotations
@@ -17,8 +17,9 @@ logger = logging.getLogger("kai.chat.notify")
 def notify_user(settings: Settings, recipient: str, message: str) -> tuple[bool, str]:
     """Send ``message`` to ``recipient`` on the configured chat platform.
 
-    Returns ``(ok, detail)``. ``recipient`` is an email on Webex, or a Slack
-    user id (``U…`` / ``W…``) or email (needs ``users:read.email``).
+    Returns ``(ok, detail)``. ``recipient`` is an email on Webex, a Slack user id
+    (``U…`` / ``W…``) or email, or a Teams AAD object id / Bot Framework user id
+    that has messaged the bot before.
     """
 
     platform = (getattr(settings, "chat_platform", "") or "webex").strip().lower()
@@ -30,10 +31,9 @@ def notify_user(settings: Settings, recipient: str, message: str) -> tuple[bool,
     if platform == "slack":
         return _slack_dm(settings, recipient, message)
     if platform == "teams":
-        return False, (
-            "Teams proactive DM needs a stored conversation reference; "
-            "use Slack or Webex, or reply in-thread."
-        )
+        from kai.chat.teams_refs import send_teams_proactive
+
+        return send_teams_proactive(settings, recipient, message)
     token = (getattr(settings, "webex_bot_token", "") or "").strip()
     if not token:
         return False, "WEBEX_BOT_TOKEN is not configured"

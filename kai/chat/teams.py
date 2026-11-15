@@ -162,6 +162,19 @@ class TeamsAdapter:
         if expected_service_url and claim_url.lower() != expected_service_url.rstrip("/").lower():
             raise RuntimeError("activity serviceUrl does not match the token's serviceurl claim")
 
+    def _remember_conversation(self, activity: dict) -> None:
+        """Persist enough of the Activity for a later proactive DM."""
+
+        db = (getattr(self._settings, "database_url", "") or "").strip()
+        if not db:
+            return
+        try:
+            from kai.chat.teams_refs import TeamsConversationStore
+
+            TeamsConversationStore(db).remember(activity)
+        except Exception as exc:  # noqa: BLE001 - never fail the webhook on store issues
+            logger.warning("kai_teams_remember_failed err=%s", type(exc).__name__)
+
     # ---- Connector API (outbound reply) ------------------------------------ #
     def _connector_token(self) -> str:
         import httpx
@@ -286,6 +299,9 @@ class TeamsAdapter:
                 raise HTTPException(status_code=401, detail="invalid bot token") from exc
 
             kind, msg, fb = parse_activity(activity)
+            # Remember conversation refs for later proactive DM (/notify + Inform).
+            if kind in {"message", "feedback"}:
+                self._remember_conversation(activity)
             if kind == "feedback":
                 ack = self._service.handle_feedback(fb)
                 # Retire the tapped card so feedback can't be submitted repeatedly:

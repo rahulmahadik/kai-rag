@@ -3,7 +3,7 @@
 KAI is **one HTTP service**. Everything: the web UI, the Webex/Slack bots, your own
 scripts, talks to the same API; there are **no provider-specific endpoints** (the
 LLM, embeddings, Confluence, and Jira providers are chosen by *config*, not by URL).
-`POST /notify` DMs on the active chat platform (Webex or Slack; Teams unsupported).
+`POST /notify` DMs on the active chat platform (Webex, Slack, or Teams with a stored conversation ref).
 
 ## Authentication
 
@@ -94,7 +94,7 @@ shows a capabilities message instead of being answered as a question.
 | --- | --- | --- |
 | `POST /feedback` | ✅ | 👍/👎 on an answer. Body `{question, verdict, reporter}`. A 👎 auto-quarantines a curated answer. |
 | `POST /escalate` | ✅ | Human escalation from a chat surface, files a ticket WITHOUT re-running `/ask`. Body `{question, reporter}`. Returns `{status, escalation_url}` (`escalation_url` is `null` when no tracker is configured). |
-| `POST /notify` | ✅ | Proactively DM a user on Webex or Slack (`CHAT_PLATFORM`). Body `{recipient|email, message}`. Missing bot token → **400**; delivery failure → **502**. Teams returns **400** (no cold-DM). |
+| `POST /notify` | ✅ | Proactively DM a user on Webex, Slack, or Teams (`CHAT_PLATFORM`). Body `{recipient|email, message}`. Missing bot token / Teams app creds → **400**; delivery failure or no stored Teams conversation → **502**. Teams recipients must have messaged the bot once (ref stored in Postgres). |
 
 ### Inform loop (approval-gated learning)
 
