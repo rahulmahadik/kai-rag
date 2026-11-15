@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.5
+
+### Added
+- **Authenticated URL crawl.** `SOURCE_URL_USER` / `SOURCE_URL_PASSWORD` send
+  HTTP Basic credentials on every fetch (seeds, sitemap, followed links, robots).
+- **PDF pages in the URL crawl.** Same-host `.pdf` links (and PDF seeds) are
+  fetched and text-extracted with pypdf, same path as local file ingest.
+
 ## 1.2.4
 
 ### Added

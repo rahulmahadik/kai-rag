@@ -91,6 +91,9 @@ class Settings(BaseSettings):
     source_url_follow_links: bool = True
     # Honour robots.txt per origin (User-agent matching KAI-url-source/…).
     source_url_respect_robots: bool = True
+    # Optional HTTP Basic for private docs sites. Blank user → no auth.
+    source_url_user: str = ""
+    source_url_password: str = ""
 
     # ------------------------------------------------------------------
     # Confluence Cloud (knowledge base)

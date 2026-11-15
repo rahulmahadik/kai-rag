@@ -19,13 +19,18 @@ SOURCE_URLS=https://docs.example.com/a,https://docs.example.com/b
 SOURCE_SITEMAP=https://docs.example.com/sitemap.xml
 SOURCE_URL_MAX_PAGES=100        # hard cap per ingest
 SOURCE_URL_FOLLOW_LINKS=true    # follow same-host links from HTML (default)
+SOURCE_URL_RESPECT_ROBOTS=true  # honour robots.txt (default)
+SOURCE_URL_USER=                # optional HTTP Basic user
+SOURCE_URL_PASSWORD=            # optional HTTP Basic password
 ```
 
 Seeds and sitemap entries start the crawl; with `SOURCE_URL_FOLLOW_LINKS`
 (default on) KAI also follows same-host `<a href>` links until
-`SOURCE_URL_MAX_PAGES` is hit. Binary assets and cross-host links are skipped.
+`SOURCE_URL_MAX_PAGES` is hit. Same-host `.pdf` links are fetched and
+text-extracted (pypdf); other binary assets and cross-host links are skipped.
 `SOURCE_URL_RESPECT_ROBOTS` (default on) fetches each origin's `/robots.txt`
-and skips disallowed paths.
+and skips disallowed paths. Set `SOURCE_URL_USER` (and optionally
+`SOURCE_URL_PASSWORD`) for private docs sites that use HTTP Basic.
 
 Then ingest as usual: `python run/setup.py ingest` (or `POST /ingest`).
 For periodic refresh, `python run/setup.py schedule-ingest` prints cron /

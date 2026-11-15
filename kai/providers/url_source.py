@@ -27,6 +27,8 @@ _DEFAULT_UA = "KAI-url-source/1.2 (+https://github.com/rahulmahadik/kai-rag)"
 
 _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
+# Binary / asset suffixes we never enqueue from HTML links. PDFs are *not*
+# listed: same-host .pdf links are fetched and text-extracted via pypdf.
 _SKIP_SUFFIXES = (
     ".png",
     ".jpg",
@@ -45,7 +47,6 @@ _SKIP_SUFFIXES = (
     ".zip",
     ".gz",
     ".tgz",
-    ".pdf",  # PDF needs a different extractor; skip in the HTML crawler
 )
 
 
@@ -228,12 +229,16 @@ class UrlKBSource:
         self._max = int(getattr(settings, "source_url_max_pages", 0) or 0) or 100
         self._follow = bool(getattr(settings, "source_url_follow_links", True))
         self._robots = bool(getattr(settings, "source_url_respect_robots", True))
+        user = (getattr(settings, "source_url_user", "") or "").strip()
+        password = getattr(settings, "source_url_password", "") or ""
+        # HTTP Basic when a username is set (password may be empty).
+        self._auth: tuple[str, str] | None = (user, password) if user else None
         self._timeout = httpx.Timeout(30.0)
         self._ua = _DEFAULT_UA
         self._headers = {"User-Agent": self._ua}
 
     def _fetch(self, client: httpx.Client, url: str) -> tuple[str, str, str] | None:
-        """Return ``(title, body_text, raw)`` or None."""
+        """Return ``(title, body_text, raw_html_or_empty)`` or None."""
 
         try:
             resp = client.get(url, follow_redirects=True)
@@ -244,6 +249,18 @@ class UrlKBSource:
             logger.warning("kai_url_fetch_status url=%s status=%d", url, resp.status_code)
             return None
         ctype = (resp.headers.get("content-type") or "").lower()
+        path_lower = urlparse(url).path.lower()
+        looks_pdf = "application/pdf" in ctype or path_lower.endswith(".pdf")
+        if looks_pdf:
+            from kai.providers.file_source import extract_text
+
+            content = getattr(resp, "content", None) or b""
+            name = path_lower.rsplit("/", 1)[-1] or "document.pdf"
+            if not name.lower().endswith(".pdf"):
+                name = "document.pdf"
+            body = (extract_text(name, content) or "").strip()
+            # No HTML to follow links from; empty raw keeps link discovery off.
+            return name, body, ""
         text = resp.text or ""
         head = text.lstrip().lower()
         looks_html = (
@@ -260,7 +277,7 @@ class UrlKBSource:
         seen: set[str] = set()
         queue: deque[str] = deque(_normalize_url(u) or u for u in self._seeds)
         yielded = 0
-        with httpx.Client(timeout=self._timeout, headers=self._headers) as client:
+        with httpx.Client(timeout=self._timeout, headers=self._headers, auth=self._auth) as client:
             robots = _RobotsCache(client, self._ua) if self._robots else None
             if self._sitemap:
                 if robots is not None and not robots.allowed(self._sitemap):

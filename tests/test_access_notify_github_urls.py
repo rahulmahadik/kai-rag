@@ -740,3 +740,146 @@ def test_url_source_reads_sitemap(monkeypatch) -> None:
         ).iter_pages()
     )
     assert len(docs) == 1 and docs[0].title == "P"
+
+
+def test_url_source_sends_basic_auth(monkeypatch) -> None:
+    seen: dict = {}
+    html = (
+        "<html><head><title>Private</title></head>"
+        "<body><p>Enough body text for a private knowledge page.</p></body></html>"
+    )
+
+    class _Resp:
+        status_code = 200
+        text = html
+
+        @property
+        def headers(self):
+            return {"content-type": "text/html"}
+
+    class _Client:
+        def __init__(self, *a, **k):
+            seen["auth"] = k.get("auth")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, url, follow_redirects=True):
+            return _Resp()
+
+    monkeypatch.setattr(httpx, "Client", _Client)
+    docs = list(
+        UrlKBSource(
+            _settings(
+                source_urls="https://ex.com/private",
+                source_url_user="docs-bot",
+                source_url_password="s3cret",
+                source_url_max_pages=3,
+                source_url_respect_robots=False,
+            )
+        ).iter_pages()
+    )
+    assert seen["auth"] == ("docs-bot", "s3cret")
+    assert len(docs) == 1 and docs[0].title == "Private"
+
+
+def test_url_source_no_auth_when_user_blank(monkeypatch) -> None:
+    seen: dict = {}
+
+    class _Client:
+        def __init__(self, *a, **k):
+            seen["auth"] = k.get("auth")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, url, follow_redirects=True):
+            class _R:
+                status_code = 200
+                text = (
+                    "<html><body><p>Public page with enough text for ingesting.</p></body></html>"
+                )
+
+                @property
+                def headers(self):
+                    return {"content-type": "text/html"}
+
+            return _R()
+
+    monkeypatch.setattr(httpx, "Client", _Client)
+    list(
+        UrlKBSource(
+            _settings(
+                source_urls="https://ex.com/public",
+                source_url_user="",
+                source_url_password="ignored",
+                source_url_respect_robots=False,
+            )
+        ).iter_pages()
+    )
+    assert seen["auth"] is None
+
+
+def test_url_source_extracts_pdf_pages(monkeypatch) -> None:
+    from kai.providers import file_source as fs
+
+    monkeypatch.setattr(
+        fs,
+        "extract_text",
+        lambda name, data: "PDF restart procedure for production services documented here.",
+    )
+    pages = {
+        "https://ex.com/guide": (
+            "<html><head><title>Guide</title></head>"
+            "<body><p>Intro page linking the PDF handbook for operators.</p>"
+            '<a href="/handbook.pdf">handbook</a></body></html>',
+            "text/html",
+            b"",
+        ),
+        "https://ex.com/handbook.pdf": ("", "application/pdf", b"%PDF-1.4 fake-bytes"),
+    }
+
+    class _Resp:
+        def __init__(self, text, ctype, content):
+            self.status_code = 200
+            self.headers = {"content-type": ctype}
+            self.text = text
+            self.content = content
+
+    class _Client:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, url, follow_redirects=True):
+            text, ctype, content = pages[url]
+            return _Resp(text, ctype, content)
+
+    monkeypatch.setattr(httpx, "Client", _Client)
+    docs = list(
+        UrlKBSource(
+            _settings(
+                source_urls="https://ex.com/guide",
+                source_url_max_pages=5,
+                source_url_follow_links=True,
+                source_url_respect_robots=False,
+            )
+        ).iter_pages()
+    )
+    titles = {d.title for d in docs}
+    assert "Guide" in titles
+    assert "handbook.pdf" in titles
+    pdf = next(d for d in docs if d.title == "handbook.pdf")
+    assert "restart procedure" in pdf.html
+    assert pdf.url.endswith("/handbook.pdf")
