@@ -21,7 +21,8 @@ all hit the same `/ask` endpoint:
 | **Teams** | portal.azure.com | `TEAMS_APP_ID` + `TEAMS_APP_PASSWORD` | **Yes** (inbound HTTPS) | `pip install '.[teams]'` then `CHAT_PLATFORM=teams python run/setup.py bot` |
 
 Common prereqs for all: the **KAI API running** (`python run/setup.py start`) and
-reachable at `KAI_API_URL` (default `http://127.0.0.1:8100`); a `.env` (`cp .env.example .env`).
+reachable at `KAI_API_URL` (default `http://127.0.0.1:8100`); a `.env`
+(`setup.py install` creates one from `.env.example` when missing).
 
 > **Access control (read before exposing a bot).** Today only **Webex** has a
 > per-user allowlist (`WEBEX_APPROVED_USERS` / `WEBEX_APPROVED_DOMAINS`). **Slack
@@ -68,7 +69,7 @@ Webex bots use an **outbound websocket**, so there's nothing to host and **no pu
    - **Description**: a short line describing the bot.
 5. Click **Add Bot** at the bottom.
 6. **Copy the Bot Access Token now. It is shown ONCE.** The next screen displays a long token string. Copy it immediately and keep it safe. If you navigate away without copying it, you must click **Regenerate Access Token**, which **invalidates the old token** (anything using it stops working).
-7. **Put the token in `.env`** (run `cp .env.example .env` first if you don't have one):
+7. **Put the token in `.env`** (`setup.py install` creates one if missing):
    ```dotenv
    CHAT_PLATFORM=webex
    WEBEX_BOT_TOKEN=<the token>     # raw token, no "Bearer " prefix, no quotes

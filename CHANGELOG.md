@@ -1,11 +1,29 @@
 # Changelog
 
-## Unreleased
+## 1.1.1
 
-### Removed
-- **Dependabot config.** Dependency floors are raised deliberately, as part of a
-  change that carries its own testing, rather than arriving as automated pull
-  requests.
+Maintenance release: dependency floors raised against a green suite, public docs
+tightened, and a few leftover inconsistencies cleaned up. No change to the
+answer contract.
+
+### Changed
+- **Dependency floors raised** to the versions the suite is green against:
+  FastAPI 0.163, uvicorn 0.54, Pydantic 2.14, pydantic-settings 2.16, psycopg
+  3.3.9, pgvector 0.5.1, NumPy 2.5.4, pypdf 7.1, plus optional extras
+  (slack_bolt 1.30, webex_bot 1.3.1, sentence-transformers 6.3, playwright
+  1.65, pyjwt 2.15). Ruff CI pin moved to 0.17.5 with the `dev` extra.
+- **Public README rewritten** as a short landing page: one install path, links
+  into `doc/` for depth. Setup docs, FAQ, and CONTRIBUTING now agree that
+  `setup.py install` creates `.env` from `.env.example` when missing.
+- **Python classifiers** list 3.12, 3.13, and 3.14 (matching the CI matrix and
+  the `python:3.14-slim` image). Repository URL added to `pyproject.toml`.
+- **Dependabot config removed.** Dependency floors are raised deliberately, as
+  part of a change that carries its own testing, rather than arriving as
+  automated pull requests.
+
+### Fixed
+- **Slack scopes comment in `.env.example`** still listed `commands`. Aligned
+  with the manifest and FAQ: `app_mentions:read`, `chat:write`, `im:history`.
 
 ## 1.1.0
 
@@ -41,11 +59,13 @@ contract beyond the grounding fixes listed below.
   become a live href. `'` is escaped and links carry `rel="noopener noreferrer"`.
 
 ### Changed
-- **Dependency floors raised** to the versions the suite is green against: FastAPI
-  0.138, uvicorn 0.49, Pydantic 2.13, psycopg 3.3, pgvector 0.4, NumPy 2.4, pypdf 6.
-  Optional extras follow (slack_bolt 1.28, webex_bot 1.3, sentence-transformers 5).
-- **Docker image on Python 3.13** and running as an unprivileged user; Compose now
-  uses `pgvector/pgvector:pg18`.
+- **Dependency floors raised** to the versions the suite was green against at
+  release: FastAPI 0.138, uvicorn 0.49, Pydantic 2.13, psycopg 3.3, pgvector
+  0.4, NumPy 2.4, pypdf 6. Optional extras follow (slack_bolt 1.28, webex_bot
+  1.3, sentence-transformers 5). Later floors are in 1.1.1.
+- **Docker image on Python 3.14** and running as an unprivileged user; Compose
+  uses `pgvector/pgvector:pg18`. (The image moved from 3.13 to 3.14 during the
+  1.1.0 Dependabot cycle before Dependabot was removed.)
 - **Ruff rule set widened** to import order, bugbear, pyupgrade, comprehension,
   pathlib and Ruff-specific checks. Every `zip()` over sequences that must align now
   passes `strict=True`.
@@ -63,7 +83,7 @@ contract beyond the grounding fixes listed below.
   without the `rerank` extra while `.env.example` ships `RERANKER=cross_encoder`, and
   `kai/providers/reranker.py` imported `sentence_transformers` unguarded. Compose now
   defaults `RERANKER=noop`, the import failure names the extra to install or the
-  setting to change, and the README states the `cp .env.example .env` prerequisite.
+  setting to change, and the README states the `.env` prerequisite.
 - **The CI non-root check passed vacuously.** `test "$(docker run ...)" != "0"` is
   true when the command fails and the substitution is empty, so a broken image would
   have been reported as non-root. It now asserts the exact uid.
@@ -74,11 +94,11 @@ contract beyond the grounding fixes listed below.
   correctly say are not needed. Removed from the manifest.
 
 ### CI and tests
-- **CI rebuilt** as four jobs: ruff lint, the unit suite on Python 3.12 and 3.13, an
-  integration job against a real `pgvector/pgvector:pg18` service container, and a
-  Docker job that builds the image, boots it, and checks `/health` and that it is not
-  running as root. Adds pip caching, run concurrency, least-privilege permissions, and
-  a Dependabot config.
+- **CI rebuilt** as four jobs: ruff lint, the unit suite on Python 3.12 / 3.13 /
+  3.14, an integration job against a real `pgvector/pgvector:pg18` service
+  container, and a Docker job that builds the image, boots it, and checks
+  `/health` and that it is not running as root. Adds pip caching, run
+  concurrency, and least-privilege permissions.
 - **Integration suite added** (`tests/integration/`), skipped unless
   `KAI_TEST_DATABASE_URL` is set: the pgvector store against real SQL, the
   ingest-to-answer pipeline over real rows, and telemetry plus the Inform queue.
@@ -95,9 +115,9 @@ contract beyond the grounding fixes listed below.
   in CI. New coverage for the HTTP providers, the admin and Inform API surface, the
   LLM helper wrappers, the reranker, provider wiring, the bot launcher, and all three
   chat adapters driven through injected fake SDKs.
-- **CI hardening**: `timeout-minutes` on every job, a pinned ruff in the lint job (an
-  unpinned floor lets a new release fail every open PR with no code change), and
-  `versioning-strategy: increase` so Dependabot actually raises the `>=` floors.
+- **CI hardening**: `timeout-minutes` on every job, and a pinned ruff in the lint
+  job (an unpinned floor lets a new release fail every open PR with no code
+  change).
 
 ## 1.0.0
 
@@ -148,53 +168,6 @@ tuning, bots/sockets, and usage patterns.
 
 ### Multi-source ingestion
 - **Files/PDF** source (`FileKBSource`) + content-type-aware chunking (markdown vs
-  plain vs HTML); robust decoding (UTF-16/CP1252, binary/oversized/scanned skipped).
-- **Incremental re-ingest** (per-doc content hash, unchanged docs skip embedding).
-- **Multiple sources**, many Confluence spaces (comma-separated `CONFLUENCE_SPACE_KEY`),
-  many Confluence **instances** (numbered `CONFLUENCE_<n>_*`, Cloud *and* self-hosted
-  Server/DC), and many directories (`SOURCE_DIRS`), combined via `CompositeKBSource`.
-
-### Interfaces
-- **Web frontend (`frontend/`)**: a standalone, dependency-free chat UI, kept
-  **separate** from the backend (its own app/origin, not bundled in the package). It
-  calls the API over CORS (`CORS_ORIGINS`, configurable API base in the UI). The API
-  is now API-only: `GET /` returns a JSON banner, not HTML.
-
-### Chat platforms (pluggable)
-- **`ChatAdapter` abstraction** (`kai/chat/`): one thin bot per platform over the
-  `/ask` API; `CHAT_PLATFORM` selects webex | slack | teams.
-- **Webex**: edit-in-place answers, proactive DM, feedback Adaptive Card, threaded
-  replies, message splitting, supervised reconnect, **inbound-file Q&A** (drop a PDF →
-  ad-hoc RAG via `/ask-document`), configurable copy (`BOT_ACK_MESSAGE`, `BOT_ANSWER_PREFIX`).
-- **Slack**: complete adapter (Socket Mode, Block Kit) + paste-to-create manifest.
-- **Teams**: inbound Bot Framework webhook adapter (`kai/chat/teams.py`), same
-  `ChatService` + Adaptive Card as Webex/Slack; serves `POST /api/messages`. Needs an
-  Azure Bot + a public HTTPS URL (`pip install '.[teams]'`); parsing is unit-tested,
-  the live Connector round-trip is verified in-tenant.
-
-### Observability & feedback
-- **M3**: per-ask structured event + `kai_questions` + `/metrics` + `/admin/gaps`.
-- **M4**: `/feedback` (👍/👎) + `/escalate` + `kai_feedback`.
-- **M2**: answer cache (ingest-busted). **M11**: Jira-egress flag. **M12**: httpx keep-alive.
-
-### Inform loop (B1), learning, safely
-- Gaps → human-curated answer → **approval-gated** synthesis into curated KB
-  (`space=kai-curated`); the next identical question then answers.
-- **Wrong-answer defense:** approval gate · optional 4-eyes (approver≠author) · audit
-  trail · **👎-driven auto-quarantine** (downvoted curated answers self-un-index) ·
-  one-call `/revoke` · curated answers labeled as community-curated in the reply.
-
-### Ops
-- **Deploy**: `Dockerfile` + `docker-compose.yml` (API + pgvector Postgres, optional
-  Ollama/bot) + systemd unit (`deploy/kai.service`) + `doc/deploy.md` (provider
-  matrix + prod checklist).
-- **Import-safe app**, `import kai.app` no longer requires a configured `.env`, so
-  the suite/CI run with zero config; a misconfigured server returns a clear 503.
-- **Server supervisor** (`run/setup.py supervise`, auto-restart).
-- **CI** (`.github/workflows/ci.yml`, full suite, no Ollama needed).
-- Dependency extras (`[bot]`, `[slack]`, `[teams]`, `[rerank]`, `[dev]`); `.env.example`
-  aligned to the validated config.
-
-### Docs
-`doc/integrations-setup.md` (Webex/Slack/Teams setup + tokens) · `doc/chat-platforms.md`
-(architecture) · `doc/sources.md` · this changelog.
+  plain text vs HTML).
+- **Multiple Confluence instances** and multiple file directories ingested together.
+- Incremental ingest with content hashing; prune of removed docs.

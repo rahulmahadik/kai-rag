@@ -2,8 +2,9 @@
 #
 # Four jobs, cheapest first:
 #   lint        ruff check + ruff format --check (fails fast on style/lint).
-#   test        the unit suite on 3.12 and 3.13. Uses fakes and validation-only
-#               constructors, so it needs neither Ollama, Postgres, nor torch.
+#   test        the unit suite on 3.12, 3.13, and 3.14. Uses fakes and
+#               validation-only constructors, so it needs neither Ollama,
+#               Postgres, nor torch.
 #   integration the same suite PLUS tests/integration, against a real Postgres
 #               with pgvector. This is what proves the SQL (hybrid RRF search,
 #               schema, upsert/replace/prune) actually works, not just the fakes.
@@ -46,7 +47,7 @@ jobs:
       - name: Install ruff
         # Pinned: an unpinned floor lets a new ruff release fail every open PR with
         # no code change. Bump this deliberately, together with the dev extra.
-        run: pip install "ruff==0.16.0"
+        run: pip install "ruff==0.17.5"
       - name: ruff check
         run: ruff check --output-format=github .
       - name: ruff format --check

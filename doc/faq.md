@@ -29,8 +29,9 @@ or chunking. It re-embeds **in place** and keeps curated answers/feedback/teleme
 
 ## Config & settings
 
-**Where is configuration?** All environment variables, copy `.env.example` to `.env`
-and edit. Every field has an inline comment.
+**Where is configuration?** All environment variables. `setup.py install` creates
+`.env` from `.env.example` when missing; edit that file. Every field has an
+inline comment.
 
 **The settings that matter most:**
 - `LLM_*` and `EMBED_*`, your model endpoints, keys, and model names.

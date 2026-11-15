@@ -56,9 +56,8 @@ python run/setup.py doctor      # confirms Postgres / pgvector / Ollama / deps a
 
 ## Step 2, Configure
 
-```bash
-cp .env.example .env
-```
+`install` already creates `.env` from `.env.example` when missing. Edit that
+file; only run `cp .env.example .env` yourself if you need a fresh copy.
 
 **You don't need to change anything to start.** `.env` ships pointing at the
 public **Apache `COMDEV`** Confluence space with the tuned settings, so it works
