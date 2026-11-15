@@ -54,6 +54,10 @@ def _slack_dm(settings: Settings, recipient: str, message: str) -> tuple[bool, s
     token = (getattr(settings, "slack_bot_token", "") or "").strip()
     if not token:
         return False, "SLACK_BOT_TOKEN is not configured"
+    # Validate shape before importing the optional SDK so missing slack_bolt
+    # does not mask a clear "bad recipient" error.
+    if "@" not in recipient and not recipient.startswith(("U", "W")):
+        return False, "Slack recipient must be a user id (U…) or an email"
     try:
         from slack_sdk import WebClient
         from slack_sdk.errors import SlackApiError
@@ -66,8 +70,6 @@ def _slack_dm(settings: Settings, recipient: str, message: str) -> tuple[bool, s
         if "@" in recipient:
             lookup = client.users_lookupByEmail(email=recipient)
             user_id = lookup["user"]["id"]
-        elif not recipient.startswith(("U", "W")):
-            return False, "Slack recipient must be a user id (U…) or an email"
         opened = client.conversations_open(users=user_id)
         channel = (opened.get("channel") or {}).get("id")
         if not channel:
